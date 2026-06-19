@@ -1,11 +1,11 @@
 # Site settings
-title: TITLE
-SEOTitle: SEOTITLE
+title: 欢迎来到 yizcdl 的小窝~
+SEOTitle: yizcdl2357's Blog
 header-img: img/home-bg.jpg
 email: yizcdl235@gmail.com
 description: "DESCRIPTION"
 keyword: "KET,WORD"
-url: "luogu.com.cn" # your host, for absolute URL
+url: "https://github.com/yizcdl2357" # your host, for absolute URL
 baseurl: "" # for example, '/blog' if your blog hosted on 'host/blog'
 
 # Publish posts or collection documents with a future date.
@@ -13,10 +13,7 @@ future: true
 
 # SNS settings
 RSS: false
-weibo_username: WEIBO
-zhihu_username: ZHIHU
-github_username: GITHUB
-twitter_username: TWITTER
+github_username: yizcdl2357
 #facebook_username:  FACE
 #linkedin_username:  LINK
 
@@ -59,10 +56,10 @@ kramdown:
       start_line: 1
 
 # Disqus settings
-disqus_username: DISQUS
+disqus_username: ???
 
 # Netease settings
-netease_comment: NETEASE
+netease_comment: ???
 
 # Analytics settings
 # Baidu Analytics
@@ -70,15 +67,15 @@ netease_comment: NETEASE
 
 # Google Analytics
 ga_track_id: "UA-49627206-1" # Format: UA-xxxxxx-xx
-ga_domain: florr.io
+ga_domain: ???
 
 # Sidebar settings
 sidebar: true # whether or not using Sidebar.
-sidebar-about-description: "SIDEBAR <br> React Team @ Meta"
-sidebar-avatar: https://fecdn.luogu.com.cn/luogu/logo.png # use absolute URL, seeing it's used in both `/` and `/about/`
+sidebar-about-description: "Math lover <br> （前）数学、信息学竞赛生 <br> 你北数院准大一新人"
+sidebar-avatar: https://cdn.luogu.com.cn/upload/usericon/340940.png # use absolute URL, seeing it's used in both `/` and `/about/`
 
 # Featured Tags
-featured-tags: true # whether or not using Feature-Tags
+featured-tags: false # whether or not using Feature-Tags
 featured-condition-size: 1 # A tag will be featured if the size of it is more than this condition value
 
 # Progressive Web Apps
@@ -91,5 +88,5 @@ page-mathjax: false
 # Friends
 friends:
   [
-    { title: "FRIEND", href: "http://huangxuan.me/" },
+    { title: "", href: "" },
   ]
