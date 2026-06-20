@@ -48,13 +48,14 @@ jobs:
         run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
         env:
           JEKYLL_ENV: production
-      - name: Copy my2048 static site
+      - name: Copy my2048 assets
         run: |
-          rm -rf _site/my2048
-          mkdir -p _site/my2048
-          cp -a my2048/. _site/my2048/
-          test -f _site/my2048/index.html
-          ls -la _site/my2048
+          rm -rf _site/assets/my2048
+          mkdir -p _site/assets/my2048
+          cp -a assets/my2048/. _site/assets/my2048/
+          test -f _site/assets/my2048/style/main.css
+          test -f _site/assets/my2048/js/application.js
+          ls -la _site/assets/my2048
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
         uses: actions/upload-pages-artifact@v3
