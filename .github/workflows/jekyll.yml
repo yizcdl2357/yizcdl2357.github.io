@@ -54,9 +54,12 @@ jobs:
           mkdir -p _site/my2048
           cp -a my2048/. _site/my2048/
           test -f _site/my2048/index.html
+          ls -la _site/my2048
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
         uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
 
   # Deployment job
   deploy:
