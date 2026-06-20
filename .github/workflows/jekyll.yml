@@ -55,6 +55,10 @@ jobs:
           cp -a assets/my2048/. _site/assets/my2048/
           test -f _site/assets/my2048/style/main.css
           test -f _site/assets/my2048/js/application.js
+          rm -rf _site/my2048
+          mkdir -p _site/my2048
+          cp my2048/index.html _site/my2048/index.html
+          test -f _site/my2048/index.html
           ls -la _site/assets/my2048
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
