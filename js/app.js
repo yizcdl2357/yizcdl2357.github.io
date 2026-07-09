@@ -60,6 +60,9 @@ function bindNavigation() {
 }
 
 function bindForms() {
+  let userEditedTheme = false;
+  let themeDetectionTimer = null;
+
   UI.$("ocrImageInput").addEventListener("change", () => {
     const file = UI.$("ocrImageInput").files[0];
     const preview = UI.$("ocrPreview");
@@ -77,6 +80,18 @@ function bindForms() {
   });
 
   UI.$("recognizeImageButton").addEventListener("click", recognizeImageText);
+
+  UI.$("paragraphTheme").addEventListener("input", () => {
+    userEditedTheme = true;
+    UI.$("themeSuggestionMessage").textContent = "";
+  });
+
+  UI.$("paragraphContent").addEventListener("input", () => {
+    window.clearTimeout(themeDetectionTimer);
+    themeDetectionTimer = window.setTimeout(() => {
+      applyThemeSuggestion(userEditedTheme);
+    }, 500);
+  });
 
   UI.$("registerForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -126,6 +141,8 @@ function bindForms() {
     UI.showMessage("uploadMessage", result.message, result.ok);
     if (result.ok) {
       UI.resetUploadForm();
+      userEditedTheme = false;
+      UI.$("themeSuggestionMessage").textContent = "";
       UI.renderHome();
       UI.renderCorpus();
       setTimeout(() => openParagraphDetail(result.paragraph.id), 500);
@@ -141,6 +158,21 @@ function bindForms() {
     );
     UI.renderCorpus(result);
   });
+}
+
+function applyThemeSuggestion(userEditedTheme) {
+  if (userEditedTheme && UI.$("paragraphTheme").value.trim()) return;
+
+  const result = ThemeService.detectTheme(UI.$("paragraphContent").value);
+  const message = UI.$("themeSuggestionMessage");
+
+  if (!result.ok) {
+    message.textContent = result.message;
+    return;
+  }
+
+  UI.$("paragraphTheme").value = result.theme;
+  message.textContent = result.message;
 }
 
 async function recognizeImageText() {
@@ -170,6 +202,7 @@ async function recognizeImageText() {
     }
 
     UI.$("paragraphContent").value = text;
+    applyThemeSuggestion(false);
     UI.showMessage("ocrMessage", "识别完成，文字已填入语段内容。", true);
   } catch (error) {
     UI.showMessage("ocrMessage", "识别失败，请换一张更清晰的图片或稍后重试");
