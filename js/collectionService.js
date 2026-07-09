@@ -89,6 +89,11 @@ const CollectionService = (() => {
     return attachCollectionCounts(paragraphs);
   }
 
+  function removeCollectionsByParagraph(paragraphId) {
+    const next = Storage.getCollections().filter((collection) => collection.paragraphId !== paragraphId);
+    Storage.saveCollections(next);
+  }
+
   return {
     collectParagraph,
     uncollectParagraph,
@@ -96,6 +101,7 @@ const CollectionService = (() => {
     isCollected,
     getCollectionCount,
     getCollectionsByUser,
+    removeCollectionsByParagraph,
     attachCollectionCounts,
     sortByCollectionCount
   };

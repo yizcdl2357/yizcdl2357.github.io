@@ -18,6 +18,19 @@ sequenceDiagram
     ParagraphService-->>UserProfilePage: 返回语段列表
     UserProfilePage-->>User: 展示用户信息和我的上传
 
+    User->>UserProfilePage: 点击某条已发布语段的删除按钮
+    UserProfilePage-->>User: 提示“确定删除该语段？”
+    User->>UserProfilePage: 确认删除
+    UserProfilePage->>ParagraphService: deleteParagraph(paragraphId)
+    ParagraphService->>ParagraphStore: deleteById(paragraphId)
+    ParagraphStore-->>ParagraphService: 返回删除结果
+    ParagraphService-->>UserProfilePage: 返回删除结果
+    UserProfilePage->>ParagraphService: getParagraphsByUser(userId)
+    ParagraphService->>ParagraphStore: findByAuthorId(userId)
+    ParagraphStore-->>ParagraphService: 返回更新后的语段列表
+    ParagraphService-->>UserProfilePage: 返回更新后的语段列表
+    UserProfilePage-->>User: 刷新我的上传列表
+
     User->>UserProfilePage: 点击我的收藏
     UserProfilePage->>CollectionPage: goToMyCollections()
     CollectionPage-->>User: 显示我的收藏界面
@@ -32,3 +45,6 @@ P4	用户未上传语段	显示“你还没有上传语段”
 P5	用户点击我的收藏	进入我的收藏界面
 P6	用户点击上边栏用户名	进入用户主页
 P7	上边栏不显示“我的主页”按钮	通过用户名作为用户主页入口
+P8	用户点击已发布语段的删除按钮	提示“确定删除该语段？”
+P9	用户确认删除	删除该语段并刷新我的上传列表
+P10	用户取消删除	关闭确认提示并保留该语段

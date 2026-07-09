@@ -31,6 +31,10 @@ const ThemeService = (() => {
     {
       theme: "健康",
       keywords: ["health", "healthy", "exercise", "sport", "sleep", "body", "健康", "运动", "睡眠", "身体"]
+    },
+    {
+      theme: "希望",
+      keywords: ["hope", "optimism", "optimistic", "winter", "spring", "behind", "difficulty", "darkness", "future", "希望", "乐观", "困境", "春天", "未来"]
     }
   ];
 

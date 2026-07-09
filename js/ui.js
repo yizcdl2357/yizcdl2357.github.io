@@ -107,7 +107,7 @@ const UI = (() => {
           <span>上传者：${paragraph.authorName}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
-        <h3>${paragraph.title}</h3>
+        <h3>${paragraph.title || "未命名语段"}</h3>
         <p class="paragraph-content">${paragraph.content}</p>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
@@ -138,7 +138,7 @@ const UI = (() => {
           <span>上传者：${paragraph.authorName}</span>
           <span>收藏：<strong id="detailCollectionCount">${paragraph.collectionCount || 0}</strong></span>
         </div>
-        <h1>${paragraph.title}</h1>
+        <h1>${paragraph.title || "未命名语段"}</h1>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
@@ -158,7 +158,7 @@ const UI = (() => {
     const recent = ParagraphService.getRecentParagraphs(3);
     $("homeRecentList").innerHTML = recent.map((paragraph) => `
       <article class="compact-item paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
-        <strong>${paragraph.title}</strong>
+        <strong>${paragraph.title || "未命名语段"}</strong>
         <p class="muted">${paragraph.themeName} · ${paragraph.tagNames.join("、") || "无标签"}</p>
       </article>
     `).join("");
@@ -178,11 +178,38 @@ const UI = (() => {
 
     $("profileUsername").textContent = currentUser.username;
     $("profileCreatedAt").textContent = `注册时间：${formatDate(currentUser.createdAt)}`;
-    renderParagraphList(
-      "profileList",
-      ParagraphService.getParagraphsByUser(currentUser.id),
-      "你还没有上传语段。"
-    );
+    return renderProfileParagraphs();
+  }
+
+  function renderProfileParagraphs() {
+    const currentUser = AuthService.getCurrentUser();
+    if (!currentUser) return false;
+
+    const paragraphs = ParagraphService.getParagraphsByUser(currentUser.id);
+    const container = $("profileList");
+
+    if (paragraphs.length === 0) {
+      container.innerHTML = `<div class="empty">你还没有上传语段。</div>`;
+      return true;
+    }
+
+    container.innerHTML = paragraphs.map((paragraph) => `
+      <article class="paragraph-card paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
+        <div class="meta">
+          <span>${paragraph.themeName}</span>
+          <span>${formatDate(paragraph.createdAt)}</span>
+          <span>收藏：${paragraph.collectionCount || 0}</span>
+        </div>
+        <h3>${paragraph.title || "未命名语段"}</h3>
+        <p class="paragraph-content">${paragraph.content}</p>
+        <div class="meta">
+          ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
+        </div>
+        <div class="card-actions">
+          <button class="danger-button delete-paragraph-button" data-paragraph-id="${paragraph.id}" type="button">删除</button>
+        </div>
+      </article>
+    `).join("");
     return true;
   }
 
@@ -228,6 +255,7 @@ const UI = (() => {
     renderHome,
     renderCorpus,
     renderProfile,
+    renderProfileParagraphs,
     renderCollections,
     renderParagraphDetail,
     updateDetailCollectionState,

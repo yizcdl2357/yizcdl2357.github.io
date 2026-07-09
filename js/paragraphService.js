@@ -34,7 +34,6 @@ const ParagraphService = (() => {
   function createParagraph(data) {
     const currentUser = AuthService.getCurrentUser();
     if (!currentUser) return { ok: false, message: "请先登录" };
-    if (!data.title.trim()) return { ok: false, message: "请输入标题" };
     if (!data.content.trim()) return { ok: false, message: "请输入语段内容" };
     if (!normalizeTheme(data.theme)) return { ok: false, message: "请填写作文主题" };
     if (data.content.trim().length < 5) return { ok: false, message: "语段内容过短" };
@@ -93,6 +92,9 @@ const ParagraphService = (() => {
     const paragraphs = Storage.getParagraphs();
     const next = paragraphs.filter((item) => item.id !== id);
     Storage.saveParagraphs(next);
+    if (typeof CollectionService !== "undefined") {
+      CollectionService.removeCollectionsByParagraph(id);
+    }
     return { ok: true, message: "删除成功" };
   }
 

@@ -18,7 +18,7 @@ classDiagram
         +string content
         +string authorId
         +string theme
-        +string[] tags
+        +Tag[] tags
         +int collectionCount
         +Date createdAt
         +Date updatedAt
@@ -40,8 +40,14 @@ classDiagram
     }
 
     class Tag {
-        +string id
-        +string name
+        <<enumeration>>
+        开头
+        结尾
+        应用文
+        读后续写
+        名言
+        动作
+        心理活动
     }
 
     class Corpus {
@@ -112,6 +118,8 @@ classDiagram
     class UserProfilePage {
         +showUserInfo()
         +showMyParagraphs()
+        +confirmDeleteParagraph(paragraphId)
+        +deleteMyParagraph(paragraphId)
         +goToMyCollections()
     }
 
@@ -119,7 +127,7 @@ classDiagram
         +title
         +content
         +theme
-        +tags
+        +Tag[] tags
         +submitParagraph()
         +validateForm()
         +goToParagraphDetail(paragraphId)

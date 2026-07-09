@@ -10,10 +10,11 @@ const THEMES = [
 const TAGS = [
   { id: "opening", name: "开头" },
   { id: "ending", name: "结尾" },
-  { id: "argument", name: "议论" },
-  { id: "example", name: "举例" },
-  { id: "advanced", name: "高级表达" },
-  { id: "transition", name: "过渡句" }
+  { id: "practical", name: "应用文" },
+  { id: "continuation", name: "读后续写" },
+  { id: "quote", name: "名言" },
+  { id: "action", name: "动作" },
+  { id: "psychology", name: "心理活动" }
 ];
 
 const SAMPLE_PARAGRAPHS = [
@@ -24,7 +25,7 @@ const SAMPLE_PARAGRAPHS = [
     authorId: "system",
     authorName: "系统示例",
     theme: "成长",
-    tags: ["opening", "advanced"],
+    tags: ["opening", "quote"],
     createdAt: "2026-07-08T08:00:00.000Z",
     updatedAt: "2026-07-08T08:00:00.000Z"
   },
@@ -35,7 +36,7 @@ const SAMPLE_PARAGRAPHS = [
     authorId: "system",
     authorName: "系统示例",
     theme: "科技",
-    tags: ["argument", "transition"],
+    tags: ["practical"],
     createdAt: "2026-07-08T08:05:00.000Z",
     updatedAt: "2026-07-08T08:05:00.000Z"
   },
@@ -46,7 +47,7 @@ const SAMPLE_PARAGRAPHS = [
     authorId: "system",
     authorName: "系统示例",
     theme: "环保",
-    tags: ["example", "ending"],
+    tags: ["ending", "action"],
     createdAt: "2026-07-08T08:10:00.000Z",
     updatedAt: "2026-07-08T08:10:00.000Z"
   }

@@ -1,3 +1,7 @@
+let userEditedTheme = false;
+let themeDetectionTimer = null;
+let autoSuggestedTheme = "";
+
 function goToPage(page) {
   if ((page === "upload" || page === "profile" || page === "collections") && !AuthService.getCurrentUser()) {
     UI.showPage("login");
@@ -29,14 +33,20 @@ function bindNavigation() {
       return;
     }
 
-    const detailButton = event.target.closest(".paragraph-detail-link");
-    if (detailButton) {
-      openParagraphDetail(detailButton.dataset.paragraphId);
+    if (event.target.id === "toggleCollectionButton") {
+      toggleCollection(event.target.dataset.paragraphId);
       return;
     }
 
-    if (event.target.id === "toggleCollectionButton") {
-      toggleCollection(event.target.dataset.paragraphId);
+    const deleteButton = event.target.closest(".delete-paragraph-button");
+    if (deleteButton) {
+      deleteMyParagraph(deleteButton.dataset.paragraphId);
+      return;
+    }
+
+    const detailButton = event.target.closest(".paragraph-detail-link");
+    if (detailButton) {
+      openParagraphDetail(detailButton.dataset.paragraphId);
       return;
     }
 
@@ -60,9 +70,6 @@ function bindNavigation() {
 }
 
 function bindForms() {
-  let userEditedTheme = false;
-  let themeDetectionTimer = null;
-
   UI.$("ocrImageInput").addEventListener("change", () => {
     const file = UI.$("ocrImageInput").files[0];
     const preview = UI.$("ocrPreview");
@@ -82,7 +89,8 @@ function bindForms() {
   UI.$("recognizeImageButton").addEventListener("click", recognizeImageText);
 
   UI.$("paragraphTheme").addEventListener("input", () => {
-    userEditedTheme = true;
+    userEditedTheme = UI.$("paragraphTheme").value.trim() !== autoSuggestedTheme;
+    if (userEditedTheme) autoSuggestedTheme = "";
     UI.$("themeSuggestionMessage").textContent = "";
   });
 
@@ -142,6 +150,7 @@ function bindForms() {
     if (result.ok) {
       UI.resetUploadForm();
       userEditedTheme = false;
+      autoSuggestedTheme = "";
       UI.$("themeSuggestionMessage").textContent = "";
       UI.renderHome();
       UI.renderCorpus();
@@ -167,11 +176,17 @@ function applyThemeSuggestion(userEditedTheme) {
   const message = UI.$("themeSuggestionMessage");
 
   if (!result.ok) {
+    if (!userEditedTheme || UI.$("paragraphTheme").value.trim() === autoSuggestedTheme) {
+      UI.$("paragraphTheme").value = "";
+      autoSuggestedTheme = "";
+    }
     message.textContent = result.message;
     return;
   }
 
   UI.$("paragraphTheme").value = result.theme;
+  autoSuggestedTheme = result.theme;
+  userEditedTheme = false;
   message.textContent = result.message;
 }
 
@@ -202,7 +217,7 @@ async function recognizeImageText() {
     }
 
     UI.$("paragraphContent").value = text;
-    applyThemeSuggestion(false);
+    applyThemeSuggestion(userEditedTheme);
     UI.showMessage("ocrMessage", "识别完成，文字已填入语段内容。", true);
   } catch (error) {
     UI.showMessage("ocrMessage", "识别失败，请换一张更清晰的图片或稍后重试");
@@ -330,6 +345,19 @@ function toggleCollection(paragraphId) {
     UI.renderProfile();
     UI.renderCollections();
   }
+}
+
+function deleteMyParagraph(paragraphId) {
+  const currentUser = AuthService.getCurrentUser();
+  const paragraph = ParagraphService.getParagraphById(paragraphId);
+  if (!currentUser || !paragraph || paragraph.authorId !== currentUser.id) return;
+  if (!window.confirm("确定删除该语段？")) return;
+
+  ParagraphService.deleteParagraph(paragraphId);
+  UI.renderProfile();
+  UI.renderHome();
+  UI.renderCorpus();
+  UI.renderCollections();
 }
 
 function initializeApp() {

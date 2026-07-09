@@ -19,7 +19,7 @@ sequenceDiagram
     UploadPage->>OCRService: recognizeText(image)
     OCRService-->>UploadPage: 返回识别出的文字
     UploadPage-->>User: 将识别文字填入语段内容
-    User->>UploadPage: 填写标题、内容、主题、标签
+    User->>UploadPage: 填写内容、主题、标签，可选填写标题
     UploadPage->>ThemeService: detectTheme(content)
     ThemeService-->>UploadPage: 返回推荐作文主题
     UploadPage-->>User: 将推荐主题设为作文主题默认值
@@ -42,7 +42,7 @@ sequenceDiagram
 上传规则表
 
 U1	用户未登录	跳转到登录界面
-U2	标题为空	提示“请输入标题”
+U2	标题为空	允许上传，标题保持为空或由系统显示默认占位
 U3	内容为空	提示“请输入语段内容”
 U4	未选择主题	提示“请选择作文主题”
 U5	内容过短	提示“语段内容过短”
@@ -52,3 +52,4 @@ U8	用户选择拍照或图片上传	调用文字识别服务并将识别结果�
 U9	文字识别失败	提示“文字识别失败，请手动输入或重新上传”
 U10	语段内容填写完毕	自动判断语段主题并设为作文主题默认值
 U11	主题识别失败	保留作文主题为空或原选择值，允许用户手动选择
+U12	用户选择标签	“应用文”“读后续写”“名言”“动作”“心理活动”与“开头”“结尾”等标签处于同一层级，可作为普通标签选择
