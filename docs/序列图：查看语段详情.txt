@@ -1,0 +1,37 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant CorpusPage as 语料库界面
+    participant ParagraphDetailPage as 语段展示界面
+    participant ParagraphService as ParagraphService
+    participant ParagraphStore as 语段数据存储
+    participant AuthService as AuthService
+    participant CollectionService as CollectionService
+
+    User->>CorpusPage: 点击某个语段
+    CorpusPage->>ParagraphDetailPage: openParagraph(paragraphId)
+    ParagraphDetailPage->>ParagraphService: getParagraphById(paragraphId)
+    ParagraphService->>ParagraphStore: findById(paragraphId)
+    ParagraphStore-->>ParagraphService: 返回语段详情
+    ParagraphService-->>ParagraphDetailPage: 返回语段详情
+    ParagraphDetailPage->>CollectionService: getCollectionCount(paragraphId)
+    CollectionService-->>ParagraphDetailPage: 返回收藏数
+    ParagraphDetailPage->>AuthService: getCurrentUser()
+    AuthService-->>ParagraphDetailPage: 返回当前用户或未登录状态
+    ParagraphDetailPage->>CollectionService: isCollected(userId, paragraphId)
+    CollectionService-->>ParagraphDetailPage: 返回收藏状态
+    ParagraphDetailPage-->>User: 展示语段详情、收藏数和收藏状态
+
+    User->>ParagraphDetailPage: 点击收藏或取消收藏
+    ParagraphDetailPage->>CollectionService: toggleCollection(userId, paragraphId)
+    CollectionService-->>ParagraphDetailPage: 返回新的收藏状态和收藏数
+    ParagraphDetailPage-->>User: 更新收藏状态和收藏数
+```
+
+语段详情规则表
+规则编号	条件	系统行为
+D1	语段存在	展示标题、内容、主题、标签和收藏数
+D2	语段不存在	显示语段不存在提示
+D3	用户未登录时点击收藏	跳转到登录界面
+D4	用户未收藏该语段时点击收藏	创建收藏记录并增加收藏数
+D5	用户已收藏该语段时点击取消收藏	删除收藏记录并减少收藏数

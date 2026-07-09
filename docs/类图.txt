@@ -1,0 +1,191 @@
+```mermaid
+classDiagram
+    class User {
+        +string id
+        +string username
+        +string passwordHash
+        +Date createdAt
+        +login()
+        +logout()
+        +uploadParagraph()
+        +viewMyParagraphs()
+        +viewMyCollections()
+    }
+
+    class Paragraph {
+        +string id
+        +string title
+        +string content
+        +string authorId
+        +string theme
+        +string[] tags
+        +int collectionCount
+        +Date createdAt
+        +Date updatedAt
+        +validateContent()
+    }
+
+    class Collection {
+        +string id
+        +string userId
+        +string paragraphId
+        +Date createdAt
+    }
+
+    class Theme {
+        +string id
+        +string name
+        +string description
+        +getParagraphs()
+    }
+
+    class Tag {
+        +string id
+        +string name
+    }
+
+    class Corpus {
+        +string id
+        +searchByTheme(theme)
+        +searchByKeyword(keyword)
+        +filterByTags(tags)
+        +sortByNewest()
+        +sortByCollectionCount()
+    }
+
+    class AuthService {
+        +login(username, password)
+        +logout()
+        +register(username, password)
+        +getCurrentUser()
+    }
+
+    class ParagraphService {
+        +createParagraph(paragraph)
+        +getParagraphById(id)
+        +getParagraphsByTheme(theme)
+        +getParagraphsByUser(userId)
+        +updateParagraph(paragraph)
+        +deleteParagraph(id)
+    }
+
+    class SearchService {
+        +search(keyword)
+        +filterByTheme(theme)
+        +filterByTags(tags)
+        +sortByCollectionCount()
+    }
+
+    class CollectionService {
+        +collectParagraph(userId, paragraphId)
+        +uncollectParagraph(userId, paragraphId)
+        +isCollected(userId, paragraphId)
+        +getCollectionCount(paragraphId)
+        +getCollectionsByUser(userId)
+    }
+
+    class HomePage {
+        +showFeaturedThemes()
+        +showRecentParagraphs()
+        +openRecentParagraph(paragraphId)
+        +goToCorpus()
+        +goToUpload()
+        +goToLogin()
+        +goToUserProfile()
+    }
+
+    class LoginPage {
+        +username
+        +password
+        +submitLogin()
+        +goToRegister()
+        +logout()
+    }
+
+    class RegisterPage {
+        +username
+        +password
+        +submitRegister()
+        +goToLogin()
+    }
+
+    class UserProfilePage {
+        +showUserInfo()
+        +showMyParagraphs()
+        +goToMyCollections()
+    }
+
+    class UploadPage {
+        +title
+        +content
+        +theme
+        +tags
+        +submitParagraph()
+        +validateForm()
+        +goToParagraphDetail(paragraphId)
+    }
+
+    class CorpusPage {
+        +keyword
+        +selectedTheme
+        +selectedTags
+        +showParagraphList()
+        +showCollectionCounts()
+        +search()
+        +filter()
+        +openParagraph(paragraphId)
+    }
+
+    class ParagraphDetailPage {
+        +string paragraphId
+        +showParagraphDetail()
+        +showCollectionCount()
+        +showCollectionState()
+        +loadParagraph(paragraphId)
+        +toggleCollection()
+        +goBackToCorpus()
+    }
+
+    class CollectionPage {
+        +showCollectedParagraphs()
+        +openParagraph(paragraphId)
+        +goBackToProfile()
+    }
+
+    User "1" --> "*" Paragraph : uploads
+    User "1" --> "*" Collection : owns
+    Paragraph "1" --> "*" Collection : collected by
+
+    Paragraph "*" --> "1" Theme : belongs to
+    Paragraph "*" --> "*" Tag : has
+
+    Corpus --> Paragraph : manages
+    Corpus --> Theme : organizes by
+
+    AuthService --> User : manages
+    ParagraphService --> Paragraph : manages
+    SearchService --> Corpus : searches
+    CollectionService --> Collection : manages
+    CollectionService --> Paragraph : updates count
+
+    LoginPage --> AuthService : uses
+    LoginPage --> RegisterPage : navigates
+    RegisterPage --> AuthService : uses
+    RegisterPage --> LoginPage : navigates
+
+    HomePage --> CorpusPage : navigates
+    HomePage --> UploadPage : navigates
+    HomePage --> LoginPage : navigates
+    HomePage --> UserProfilePage : navigates
+    HomePage --> ParagraphDetailPage : navigates
+    UserProfilePage --> ParagraphService : uses
+    UserProfilePage --> CollectionPage : navigates
+    UploadPage --> ParagraphService : uses
+    UploadPage --> ParagraphDetailPage : navigates
+    CorpusPage --> SearchService : uses
+    CorpusPage --> ParagraphDetailPage : navigates
+    ParagraphDetailPage --> ParagraphService : uses
+    ParagraphDetailPage --> CollectionService : uses
+    CollectionPage --> CollectionService : uses
+    CollectionPage --> ParagraphDetailPage : navigates
+```

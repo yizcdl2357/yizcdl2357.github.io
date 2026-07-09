@@ -1,0 +1,34 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant HomePage as 网站主页
+    participant UserProfilePage as 用户主页
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ParagraphStore as 语段数据存储
+    participant CollectionPage as 我的收藏界面
+
+    User->>HomePage: 点击上边栏用户名
+    HomePage->>UserProfilePage: goToUserProfile()
+    UserProfilePage->>AuthService: getCurrentUser()
+    AuthService-->>UserProfilePage: 返回当前用户
+    UserProfilePage->>ParagraphService: getParagraphsByUser(userId)
+    ParagraphService->>ParagraphStore: findByAuthorId(userId)
+    ParagraphStore-->>ParagraphService: 返回用户上传的语段
+    ParagraphService-->>UserProfilePage: 返回语段列表
+    UserProfilePage-->>User: 展示用户信息和我的上传
+
+    User->>UserProfilePage: 点击我的收藏
+    UserProfilePage->>CollectionPage: goToMyCollections()
+    CollectionPage-->>User: 显示我的收藏界面
+```
+
+用户主页规则表
+规则编号	条件	系统行为
+P1	用户未登录	跳转到登录界面
+P2	用户已登录	展示用户名和注册时间
+P3	用户上传过语段	展示该用户上传的语段列表
+P4	用户未上传语段	显示“你还没有上传语段”
+P5	用户点击我的收藏	进入我的收藏界面
+P6	用户点击上边栏用户名	进入用户主页
+P7	上边栏不显示“我的主页”按钮	通过用户名作为用户主页入口

@@ -1,0 +1,26 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant UserProfilePage as 用户主页
+    participant CollectionPage as 我的收藏界面
+    participant AuthService as AuthService
+    participant CollectionService as CollectionService
+    participant ParagraphStore as 语段数据存储
+
+    User->>UserProfilePage: 点击我的收藏
+    UserProfilePage->>CollectionPage: goToMyCollections()
+    CollectionPage->>AuthService: getCurrentUser()
+    AuthService-->>CollectionPage: 返回当前用户
+    CollectionPage->>CollectionService: getCollectionsByUser(userId)
+    CollectionService->>ParagraphStore: findCollectedParagraphs(userId)
+    ParagraphStore-->>CollectionService: 返回收藏语段列表
+    CollectionService-->>CollectionPage: 返回带收藏数的收藏语段列表
+    CollectionPage-->>User: 展示我收藏的语段
+```
+
+查看收藏规则表
+规则编号	条件	系统行为
+C1	用户未登录	跳转到登录界面
+C2	用户已登录且收藏过语段	展示用户收藏的语段列表和收藏数
+C3	用户没有收藏语段	显示“你还没有收藏语段”
+C4	用户点击收藏语段	进入对应语段展示界面

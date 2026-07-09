@@ -1,0 +1,17 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant CorpusPage as 语料库界面
+    participant SearchService as SearchService
+    participant ParagraphStore as 语段数据存储
+    participant CollectionService as CollectionService
+
+    User->>CorpusPage: 进入语料库界面
+    CorpusPage->>SearchService: getParagraphsOrderByCollectionCount()
+    SearchService->>ParagraphStore: findAll()
+    ParagraphStore-->>SearchService: 返回语段列表
+    SearchService->>CollectionService: attachCollectionCounts(paragraphs)
+    CollectionService-->>SearchService: 返回带收藏数的语段列表
+    SearchService-->>CorpusPage: 返回按收藏数排序的语段列表
+    CorpusPage-->>User: 展示语料库内容和收藏数
+```

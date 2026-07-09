@@ -1,0 +1,27 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant CorpusPage as 语料库界面
+    participant SearchService as SearchService
+    participant ParagraphStore as 语段数据存储
+    participant CollectionService as CollectionService
+
+    User->>CorpusPage: 输入关键词 / 选择主题 / 选择标签
+    User->>CorpusPage: 点击搜索
+    CorpusPage->>SearchService: search(keyword, themeId, tags)
+    SearchService->>ParagraphStore: findByConditions(keyword, themeId, tags)
+    ParagraphStore-->>SearchService: 返回匹配语段列表
+    SearchService->>CollectionService: attachCollectionCounts(paragraphs)
+    CollectionService-->>SearchService: 返回带收藏数的语段列表
+    SearchService-->>CorpusPage: 返回按收藏数排序的搜索结果
+    CorpusPage-->>User: 展示搜索结果和收藏数
+```
+
+搜索规则表
+规则编号	条件	系统行为
+S1	未输入关键词、未选择主题、未选择标签	展示按收藏数排序的语段
+S2	只选择主题	展示该主题下按收藏数排序的语段
+S3	只输入关键词	展示标题或内容中包含关键词且按收藏数排序的语段
+S4	只选择标签	展示包含该标签且按收藏数排序的语段
+S5	同时使用多个条件	展示同时满足条件且按收藏数排序的语段
+S6	无匹配结果	显示空结果提示
