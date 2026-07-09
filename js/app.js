@@ -158,18 +158,11 @@ async function recognizeImageText() {
   }
 
   button.disabled = true;
-  UI.showMessage("ocrMessage", "正在识别文字，首次使用可能需要稍等...", true);
+  UI.showMessage("ocrMessage", "正在预处理图片，首次使用可能需要稍等...", true);
 
   try {
-    const result = await Tesseract.recognize(file, "eng", {
-      logger: (status) => {
-        if (status.status === "recognizing text") {
-          const progress = Math.round(status.progress * 100);
-          UI.showMessage("ocrMessage", `正在识别文字：${progress}%`, true);
-        }
-      }
-    });
-    const text = result.data.text.replace(/\n{3,}/g, "\n\n").trim();
+    const result = await recognizeWithMultipleAngles(file);
+    const text = cleanOcrText(result.text);
 
     if (!text) {
       UI.showMessage("ocrMessage", "没有识别到文字，请换一张更清晰的图片");
@@ -183,6 +176,103 @@ async function recognizeImageText() {
   } finally {
     button.disabled = false;
   }
+}
+
+async function recognizeWithMultipleAngles(file) {
+  const angles = [0, -35, -30, -25, -20, -15, 15, 20, 25, 30, 35];
+  let bestResult = { text: "", confidence: -1 };
+
+  for (let index = 0; index < angles.length; index += 1) {
+    const angle = angles[index];
+    UI.showMessage("ocrMessage", `正在识别文字：尝试角度 ${index + 1}/${angles.length}`, true);
+
+    const image = await preprocessImage(file, angle);
+    const result = await Tesseract.recognize(image, "eng", {
+      tessedit_pageseg_mode: "7",
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,.!?;:'\"-() ",
+      logger: (status) => {
+        if (status.status === "recognizing text") {
+          const progress = Math.round(status.progress * 100);
+          UI.showMessage("ocrMessage", `正在识别文字：${index + 1}/${angles.length}，${progress}%`, true);
+        }
+      }
+    });
+
+    const text = cleanOcrText(result.data.text);
+    const confidence = scoreOcrResult(text, result.data.confidence);
+    if (confidence > bestResult.confidence) {
+      bestResult = { text, confidence };
+    }
+  }
+
+  return bestResult;
+}
+
+async function preprocessImage(file, angle) {
+  const bitmap = await loadBitmap(file);
+  const scale = Math.max(2, Math.min(4, 1600 / Math.max(bitmap.width, bitmap.height)));
+  const radians = angle * Math.PI / 180;
+  const width = Math.ceil(bitmap.width * scale);
+  const height = Math.ceil(bitmap.height * scale);
+  const rotatedWidth = Math.ceil(Math.abs(width * Math.cos(radians)) + Math.abs(height * Math.sin(radians)));
+  const rotatedHeight = Math.ceil(Math.abs(width * Math.sin(radians)) + Math.abs(height * Math.cos(radians)));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  canvas.width = rotatedWidth;
+  canvas.height = rotatedHeight;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate(radians);
+  context.drawImage(bitmap, -width / 2, -height / 2, width, height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const enhanced = gray < 180 ? Math.max(0, gray - 55) : Math.min(255, gray + 35);
+    const value = enhanced < 185 ? 0 : 255;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+
+  context.putImageData(imageData, 0, 0);
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
+async function loadBitmap(file) {
+  if (window.createImageBitmap) {
+    return createImageBitmap(file);
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+function cleanOcrText(text) {
+  return text
+    .replace(/[|\\[\]{}~`_*<>]/g, "")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function scoreOcrResult(text, confidence) {
+  const letters = (text.match(/[A-Za-z]/g) || []).length;
+  const words = (text.match(/[A-Za-z]{2,}/g) || []).length;
+  const punctuation = (text.match(/[,.!?]/g) || []).length;
+  return confidence + letters * 2 + words * 8 + punctuation * 3;
 }
 
 function openParagraphDetail(paragraphId) {
