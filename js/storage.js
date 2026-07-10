@@ -22,6 +22,8 @@ const Storage = (() => {
   }
 
   function initialize() {
+    const validTagIds = new Set(TAGS.map((tag) => tag.id));
+
     if (!localStorage.getItem(keys.users)) {
       write(keys.users, []);
     }
@@ -33,6 +35,13 @@ const Storage = (() => {
     if (!localStorage.getItem(keys.collections)) {
       write(keys.collections, []);
     }
+
+    const paragraphs = read(keys.paragraphs, []);
+    const normalizedParagraphs = paragraphs.map((paragraph) => ({
+      ...paragraph,
+      tags: (paragraph.tags || []).filter((tagId) => validTagIds.has(tagId))
+    }));
+    write(keys.paragraphs, normalizedParagraphs);
   }
 
   return {

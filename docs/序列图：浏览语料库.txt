@@ -13,5 +13,12 @@ sequenceDiagram
     SearchService->>CollectionService: attachCollectionCounts(paragraphs)
     CollectionService-->>SearchService: 返回带收藏数的语段列表
     SearchService-->>CorpusPage: 返回按收藏数排序的语段列表
-    CorpusPage-->>User: 展示语料库内容和收藏数
+    CorpusPage->>CorpusPage: formatParagraphPreview(maxLength=300)
+    CorpusPage-->>User: 展示正文预览、主题、标签和收藏数
 ```
+
+语料库展示规则表
+规则编号	条件	系统行为
+B1	展示语料库列表	每篇语段不显示标题
+B2	正文字符数大于300	仅显示前300字并追加省略号
+B3	正文字符数不超过300	显示完整正文

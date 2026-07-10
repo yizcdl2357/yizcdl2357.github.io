@@ -14,7 +14,8 @@ sequenceDiagram
     SearchService->>CollectionService: attachCollectionCounts(paragraphs)
     CollectionService-->>SearchService: 返回带收藏数的语段列表
     SearchService-->>CorpusPage: 返回按收藏数排序的搜索结果
-    CorpusPage-->>User: 展示搜索结果和收藏数
+    CorpusPage->>CorpusPage: formatParagraphPreview(maxLength=300)
+    CorpusPage-->>User: 展示搜索结果正文预览、主题、标签和收藏数
 ```
 
 搜索规则表
@@ -25,3 +26,6 @@ S3	只输入关键词	展示内容中包含关键词且按收藏数排序的语�
 S4	只选择标签	展示包含该标签且按收藏数排序的语段
 S5	同时使用多个条件	展示同时满足条件且按收藏数排序的语段
 S6	无匹配结果	显示空结果提示
+S7	展示搜索结果列表	每篇语段不显示标题
+S8	正文字符数大于300	仅显示前300字并追加省略号
+S9	正文字符数不超过300	显示完整正文

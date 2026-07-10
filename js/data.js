@@ -10,11 +10,14 @@ const THEMES = [
 const TAGS = [
   { id: "opening", name: "开头" },
   { id: "ending", name: "结尾" },
+  { id: "transition", name: "过渡" },
   { id: "practical", name: "应用文" },
   { id: "continuation", name: "读后续写" },
+  { id: "argument", name: "议论" },
   { id: "quote", name: "名言" },
   { id: "action", name: "动作" },
-  { id: "psychology", name: "心理活动" }
+  { id: "psychology", name: "心理活动" },
+  { id: "advanced-expression", name: "高级表达" }
 ];
 
 const SAMPLE_PARAGRAPHS = [

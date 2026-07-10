@@ -42,11 +42,14 @@ classDiagram
         <<enumeration>>
         开头
         结尾
+        过渡
         应用文
         读后续写
+        议论
         名言
         动作
         心理活动
+        高级表达
     }
 
     class Corpus {

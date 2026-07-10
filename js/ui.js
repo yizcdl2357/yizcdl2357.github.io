@@ -66,7 +66,7 @@ const UI = (() => {
     return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((item) => item.value);
   }
 
-  function getContentSummary(content, maxLength = 72) {
+  function getContentSummary(content, maxLength = 300) {
     const cleanContent = content.replace(/\s+/g, " ").trim();
     return cleanContent.length > maxLength
       ? `${cleanContent.slice(0, maxLength)}...`
@@ -114,8 +114,7 @@ const UI = (() => {
           <span>上传者：${paragraph.authorName}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
-        <h3>${getContentSummary(paragraph.content)}</h3>
-        <p class="paragraph-content">${paragraph.content}</p>
+        <p class="paragraph-content">${getContentSummary(paragraph.content)}</p>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
@@ -206,8 +205,7 @@ const UI = (() => {
           <span>${formatDate(paragraph.createdAt)}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
-        <h3>${getContentSummary(paragraph.content)}</h3>
-        <p class="paragraph-content">${paragraph.content}</p>
+        <p class="paragraph-content">${getContentSummary(paragraph.content)}</p>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
