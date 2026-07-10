@@ -20,7 +20,6 @@ const TAGS = [
 const SAMPLE_PARAGRAPHS = [
   {
     id: "sample-1",
-    title: "坚持带来改变",
     content: "Small efforts, when repeated day after day, can lead to remarkable changes. What truly matters is not how fast we move, but whether we keep moving in the right direction.",
     authorId: "system",
     authorName: "系统示例",
@@ -31,7 +30,6 @@ const SAMPLE_PARAGRAPHS = [
   },
   {
     id: "sample-2",
-    title: "科技是一把双刃剑",
     content: "Technology has made information more accessible than ever before. However, it also requires us to think independently, use digital tools wisely, and protect our attention from endless distractions.",
     authorId: "system",
     authorName: "系统示例",
@@ -42,7 +40,6 @@ const SAMPLE_PARAGRAPHS = [
   },
   {
     id: "sample-3",
-    title: "环保行动从日常开始",
     content: "Protecting the environment is not only a slogan, but also a habit. By saving water, reducing waste and choosing public transport, each of us can make a visible difference.",
     authorId: "system",
     authorName: "系统示例",

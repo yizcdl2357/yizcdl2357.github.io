@@ -134,7 +134,6 @@ function bindForms() {
   UI.$("uploadForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const result = ParagraphService.createParagraph({
-      title: UI.$("paragraphTitle").value,
       content: UI.$("paragraphContent").value,
       theme: UI.$("paragraphTheme").value,
       tags: UI.getCheckedValues("uploadTags")

@@ -66,6 +66,13 @@ const UI = (() => {
     return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((item) => item.value);
   }
 
+  function getContentSummary(content, maxLength = 72) {
+    const cleanContent = content.replace(/\s+/g, " ").trim();
+    return cleanContent.length > maxLength
+      ? `${cleanContent.slice(0, maxLength)}...`
+      : cleanContent;
+  }
+
   function renderFeaturedThemes() {
     const themeCounts = ParagraphService.getRecentParagraphs()
       .reduce((counts, paragraph) => {
@@ -107,7 +114,7 @@ const UI = (() => {
           <span>上传者：${paragraph.authorName}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
-        <h3>${paragraph.title || "未命名语段"}</h3>
+        <h3>${getContentSummary(paragraph.content)}</h3>
         <p class="paragraph-content">${paragraph.content}</p>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
@@ -138,7 +145,6 @@ const UI = (() => {
           <span>上传者：${paragraph.authorName}</span>
           <span>收藏：<strong id="detailCollectionCount">${paragraph.collectionCount || 0}</strong></span>
         </div>
-        <h1>${paragraph.title || "未命名语段"}</h1>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
@@ -158,7 +164,7 @@ const UI = (() => {
     const recent = ParagraphService.getRecentParagraphs(3);
     $("homeRecentList").innerHTML = recent.map((paragraph) => `
       <article class="compact-item paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
-        <strong>${paragraph.title || "未命名语段"}</strong>
+        <strong>${getContentSummary(paragraph.content, 48)}</strong>
         <p class="muted">${paragraph.themeName} · ${paragraph.tagNames.join("、") || "无标签"}</p>
       </article>
     `).join("");
@@ -200,7 +206,7 @@ const UI = (() => {
           <span>${formatDate(paragraph.createdAt)}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
-        <h3>${paragraph.title || "未命名语段"}</h3>
+        <h3>${getContentSummary(paragraph.content)}</h3>
         <p class="paragraph-content">${paragraph.content}</p>
         <div class="meta">
           ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}

@@ -13,7 +13,6 @@ const SearchService = (() => {
 
     const result = Storage.getParagraphs().filter((paragraph) => {
       const matchesKeyword = !cleanKeyword ||
-        paragraph.title.toLowerCase().includes(cleanKeyword) ||
         paragraph.content.toLowerCase().includes(cleanKeyword);
 
       const matchesTheme = !cleanTheme || getThemeName(paragraph).toLowerCase().includes(cleanTheme);

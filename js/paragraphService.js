@@ -41,7 +41,6 @@ const ParagraphService = (() => {
     const now = new Date().toISOString();
     const paragraph = {
       id: `paragraph-${Date.now()}`,
-      title: data.title.trim(),
       content: data.content.trim(),
       authorId: currentUser.id,
       authorName: currentUser.username,
