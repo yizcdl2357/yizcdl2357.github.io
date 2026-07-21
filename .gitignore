@@ -2,6 +2,7 @@
 data/*.sqlite
 data/*.sqlite-*
 data/*.txt
+data/*.png
 node_modules/
 tools/sqlite/*.exe
 tools/sqlite/*.zip
