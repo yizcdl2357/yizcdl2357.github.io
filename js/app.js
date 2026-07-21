@@ -2,70 +2,70 @@ let userEditedTheme = false;
 let themeDetectionTimer = null;
 let autoSuggestedTheme = "";
 
-function goToPage(page) {
+async function goToPage(page) {
   if ((page === "upload" || page === "profile" || page === "collections") && !AuthService.getCurrentUser()) {
     UI.showPage("login");
     UI.showMessage("loginMessage", "请先登录");
     return;
   }
 
-  if (page === "home") UI.renderHome();
-  if (page === "corpus") UI.renderCorpus();
-  if (page === "profile" && !UI.renderProfile()) return;
-  if (page === "collections" && !UI.renderCollections()) return;
+  if (page === "home") await UI.renderHome();
+  if (page === "corpus") await UI.renderCorpus();
+  if (page === "profile" && !await UI.renderProfile()) return;
+  if (page === "collections" && !await UI.renderCollections()) return;
 
   UI.showPage(page);
 }
 
 function bindNavigation() {
-  document.body.addEventListener("click", (event) => {
+  document.body.addEventListener("click", async (event) => {
     const pageButton = event.target.closest("[data-page]");
     if (pageButton) {
-      goToPage(pageButton.dataset.page);
+      await goToPage(pageButton.dataset.page);
       return;
     }
 
     const themeButton = event.target.closest(".theme-search");
     if (themeButton) {
       UI.$("searchTheme").value = themeButton.dataset.theme;
-      UI.renderCorpus(SearchService.filterByTheme(themeButton.dataset.theme));
+      await UI.renderCorpus(await SearchService.filterByTheme(themeButton.dataset.theme));
       UI.showPage("corpus");
       return;
     }
 
     if (event.target.id === "toggleCollectionButton") {
-      toggleCollection(event.target.dataset.paragraphId);
+      await toggleCollection(event.target.dataset.paragraphId);
       return;
     }
 
     const deleteButton = event.target.closest(".delete-paragraph-button");
     if (deleteButton) {
-      deleteMyParagraph(deleteButton.dataset.paragraphId);
+      await deleteMyParagraph(deleteButton.dataset.paragraphId);
       return;
     }
 
     const detailButton = event.target.closest(".paragraph-detail-link");
     if (detailButton) {
-      openParagraphDetail(detailButton.dataset.paragraphId);
+      await openParagraphDetail(detailButton.dataset.paragraphId);
       return;
     }
 
     if (event.target.id === "logoutButton") {
-      AuthService.logout();
+      await AuthService.logout();
       UI.renderAuthArea();
       UI.showPage("login");
       UI.showMessage("loginMessage", "已退出登录", true);
     }
   });
 
-  document.body.addEventListener("keydown", (event) => {
+  document.body.addEventListener("keydown", async (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
 
     const detailCard = event.target.closest(".paragraph-detail-link");
     if (!detailCard) return;
 
     event.preventDefault();
-    openParagraphDetail(detailCard.dataset.paragraphId);
+    await openParagraphDetail(detailCard.dataset.paragraphId);
   });
 }
 
@@ -101,9 +101,9 @@ function bindForms() {
     }, 500);
   });
 
-  UI.$("registerForm").addEventListener("submit", (event) => {
+  UI.$("registerForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const result = AuthService.register(
+    const result = await AuthService.register(
       UI.$("registerUsername").value,
       UI.$("registerPassword").value
     );
@@ -116,9 +116,9 @@ function bindForms() {
     }
   });
 
-  UI.$("loginForm").addEventListener("submit", (event) => {
+  UI.$("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const result = AuthService.login(
+    const result = await AuthService.login(
       UI.$("loginUsername").value,
       UI.$("loginPassword").value
     );
@@ -127,20 +127,21 @@ function bindForms() {
     if (result.ok) {
       UI.$("loginForm").reset();
       UI.renderAuthArea();
-      goToPage("home");
+      await CollectionService.refreshMyCollections();
+      await goToPage("home");
     }
   });
 
-  UI.$("uploadForm").addEventListener("submit", (event) => {
+  UI.$("uploadForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const result = ParagraphService.createParagraph({
+    const result = await ParagraphService.createParagraph({
       content: UI.$("paragraphContent").value,
       theme: UI.$("paragraphTheme").value,
       tags: UI.getCheckedValues("uploadTags")
     });
 
     if (!result.ok && result.message === "请先登录") {
-      goToPage("login");
+      await goToPage("login");
       UI.showMessage("loginMessage", result.message);
       return;
     }
@@ -151,20 +152,20 @@ function bindForms() {
       userEditedTheme = false;
       autoSuggestedTheme = "";
       UI.$("themeSuggestionMessage").textContent = "";
-      UI.renderHome();
-      UI.renderCorpus();
-      setTimeout(() => openParagraphDetail(result.paragraph.id), 500);
+      await UI.renderHome();
+      await UI.renderCorpus();
+      window.setTimeout(() => openParagraphDetail(result.paragraph.id), 500);
     }
   });
 
-  UI.$("searchForm").addEventListener("submit", (event) => {
+  UI.$("searchForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const result = SearchService.search(
+    const result = await SearchService.search(
       UI.$("searchKeyword").value,
       UI.$("searchTheme").value,
       UI.getCheckedValues("searchTags")
     );
-    UI.renderCorpus(result);
+    await UI.renderCorpus(result);
   });
 }
 
@@ -322,13 +323,13 @@ function scoreOcrResult(text, confidence) {
   return confidence + letters * 2 + words * 8 + punctuation * 3;
 }
 
-function openParagraphDetail(paragraphId) {
-  if (UI.renderParagraphDetail(paragraphId)) {
+async function openParagraphDetail(paragraphId) {
+  if (await UI.renderParagraphDetail(paragraphId)) {
     UI.showPage("detail");
   }
 }
 
-function toggleCollection(paragraphId) {
+async function toggleCollection(paragraphId) {
   const currentUser = AuthService.getCurrentUser();
   if (!currentUser) {
     UI.showPage("login");
@@ -336,38 +337,45 @@ function toggleCollection(paragraphId) {
     return;
   }
 
-  CollectionService.toggleCollection(currentUser.id, paragraphId);
-  UI.updateDetailCollectionState(paragraphId);
-  UI.renderHome();
-  UI.renderCorpus();
+  await CollectionService.toggleCollection(currentUser.id, paragraphId);
+  await UI.updateDetailCollectionState(paragraphId);
+  await UI.renderHome();
+  await UI.renderCorpus();
   if (AuthService.getCurrentUser()) {
-    UI.renderProfile();
-    UI.renderCollections();
+    await UI.renderProfile();
+    await UI.renderCollections();
   }
 }
 
-function deleteMyParagraph(paragraphId) {
+async function deleteMyParagraph(paragraphId) {
   const currentUser = AuthService.getCurrentUser();
-  const paragraph = ParagraphService.getParagraphById(paragraphId);
+  const paragraph = await ParagraphService.getParagraphById(paragraphId);
   if (!currentUser || !paragraph || paragraph.authorId !== currentUser.id) return;
-  if (!window.confirm("确定删除该语段？")) return;
+  if (!window.confirm("确定删除该语段吗？")) return;
 
-  ParagraphService.deleteParagraph(paragraphId);
-  UI.renderProfile();
-  UI.renderHome();
-  UI.renderCorpus();
-  UI.renderCollections();
+  await ParagraphService.deleteParagraph(paragraphId);
+  await UI.renderProfile();
+  await UI.renderHome();
+  await UI.renderCorpus();
+  await UI.renderCollections();
 }
 
-function initializeApp() {
+async function initializeApp() {
   Storage.initialize();
+  await AuthService.initialize();
+  if (AuthService.getCurrentUser()) await CollectionService.refreshMyCollections();
   UI.renderTagOptions("uploadTags", "uploadTags");
   UI.renderTagOptions("searchTags", "searchTags");
   UI.renderAuthArea();
-  UI.renderHome();
-  UI.renderCorpus();
+  await UI.renderHome();
+  await UI.renderCorpus();
   bindNavigation();
   bindForms();
 }
 
-document.addEventListener("DOMContentLoaded", initializeApp);
+document.addEventListener("DOMContentLoaded", () => {
+  initializeApp().catch((error) => {
+    console.error(error);
+    UI.$("homeRecentList").innerHTML = `<div class="empty">后端服务暂时不可用，请稍后重试。</div>`;
+  });
+});

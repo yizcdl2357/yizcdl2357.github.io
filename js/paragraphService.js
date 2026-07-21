@@ -1,4 +1,40 @@
 const ParagraphService = (() => {
+  async function createParagraph(data) {
+    const result = await ApiClient.post("/api/paragraphs", data);
+    return result.offline ? createParagraphLocal(data) : result;
+  }
+
+  async function getParagraphById(id) {
+    const result = await ApiClient.get(`/api/paragraphs/${encodeURIComponent(id)}`);
+    if (result.offline) return getParagraphByIdLocal(id);
+    return result.ok ? result.paragraph : null;
+  }
+
+  async function getParagraphsByTheme(theme) {
+    const result = await ApiClient.get(`/api/paragraphs?theme=${encodeURIComponent(theme)}`);
+    if (result.offline) return getParagraphsByThemeLocal(theme);
+    return result.ok ? result.paragraphs : [];
+  }
+
+  async function getParagraphsByUser() {
+    const result = await ApiClient.get("/api/me/paragraphs");
+    if (result.offline) return getParagraphsByUserLocal(AuthService.getCurrentUser()?.id);
+    return result.ok ? result.paragraphs : [];
+  }
+
+  async function getRecentParagraphs(limit) {
+    const result = await ApiClient.get("/api/paragraphs");
+    const paragraphs = result.offline
+      ? getRecentParagraphsLocal()
+      : result.ok ? result.paragraphs : [];
+    return limit ? paragraphs.slice(0, limit) : paragraphs;
+  }
+
+  async function deleteParagraph(id) {
+    const result = await ApiClient.del(`/api/paragraphs/${encodeURIComponent(id)}`);
+    return result.offline ? deleteParagraphLocal(id) : result;
+  }
+
   function normalizeTheme(theme) {
     return (theme || "").trim();
   }
@@ -15,15 +51,13 @@ const ParagraphService = (() => {
   }
 
   function enrich(paragraph) {
-    const collectionCount = typeof CollectionService === "undefined"
-      ? paragraph.collectionCount || 0
-      : CollectionService.getCollectionCount(paragraph.id);
-
     return {
       ...paragraph,
       themeName: getThemeName(paragraph),
       tagNames: getTagNames(paragraph.tags || []),
-      collectionCount
+      collectionCount: CollectionService.getCollectionCountLocal
+        ? CollectionService.getCollectionCountLocal(paragraph.id)
+        : paragraph.collectionCount || 0
     };
   }
 
@@ -31,7 +65,7 @@ const ParagraphService = (() => {
     return [...paragraphs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
-  function createParagraph(data) {
+  function createParagraphLocal(data) {
     const currentUser = AuthService.getCurrentUser();
     if (!currentUser) return { ok: false, message: "请先登录" };
     if (!data.content.trim()) return { ok: false, message: "请输入语段内容" };
@@ -45,7 +79,7 @@ const ParagraphService = (() => {
       authorId: currentUser.id,
       authorName: currentUser.username,
       theme: normalizeTheme(data.theme),
-      tags: data.tags,
+      tags: data.tags || [],
       createdAt: now,
       updatedAt: now
     };
@@ -56,44 +90,31 @@ const ParagraphService = (() => {
     return { ok: true, message: "上传成功", paragraph: enrich(paragraph) };
   }
 
-  function getParagraphById(id) {
+  function getParagraphByIdLocal(id) {
     const paragraph = Storage.getParagraphs().find((item) => item.id === id);
     return paragraph ? enrich(paragraph) : null;
   }
 
-  function getParagraphsByTheme(theme) {
+  function getParagraphsByThemeLocal(theme) {
     const cleanTheme = normalizeTheme(theme).toLowerCase();
     return sortNewest(Storage.getParagraphs().filter((item) => {
       return getThemeName(item).toLowerCase().includes(cleanTheme);
     })).map(enrich);
   }
 
-  function getParagraphsByUser(userId) {
+  function getParagraphsByUserLocal(userId) {
     return sortNewest(Storage.getParagraphs().filter((item) => item.authorId === userId)).map(enrich);
   }
 
-  function getRecentParagraphs(limit) {
-    const paragraphs = sortNewest(Storage.getParagraphs()).map(enrich);
-    return limit ? paragraphs.slice(0, limit) : paragraphs;
+  function getRecentParagraphsLocal() {
+    return sortNewest(Storage.getParagraphs()).map(enrich);
   }
 
-  function updateParagraph(updatedParagraph) {
-    const paragraphs = Storage.getParagraphs();
-    const index = paragraphs.findIndex((item) => item.id === updatedParagraph.id);
-    if (index === -1) return { ok: false, message: "语段不存在" };
-
-    paragraphs[index] = { ...paragraphs[index], ...updatedParagraph, updatedAt: new Date().toISOString() };
-    Storage.saveParagraphs(paragraphs);
-    return { ok: true, message: "更新成功", paragraph: enrich(paragraphs[index]) };
-  }
-
-  function deleteParagraph(id) {
+  function deleteParagraphLocal(id) {
     const paragraphs = Storage.getParagraphs();
     const next = paragraphs.filter((item) => item.id !== id);
     Storage.saveParagraphs(next);
-    if (typeof CollectionService !== "undefined") {
-      CollectionService.removeCollectionsByParagraph(id);
-    }
+    CollectionService.removeCollectionsByParagraph(id);
     return { ok: true, message: "删除成功" };
   }
 
@@ -103,7 +124,8 @@ const ParagraphService = (() => {
     getParagraphsByTheme,
     getParagraphsByUser,
     getRecentParagraphs,
-    updateParagraph,
-    deleteParagraph
+    deleteParagraph,
+    getParagraphByIdLocal,
+    getRecentParagraphsLocal
   };
 })();

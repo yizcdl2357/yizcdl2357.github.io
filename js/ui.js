@@ -30,7 +30,7 @@ const UI = (() => {
 
   function showMessage(id, message, isSuccess = false) {
     const element = $(id);
-    element.textContent = message;
+    element.textContent = message || "";
     element.classList.toggle("success", isSuccess);
   }
 
@@ -73,12 +73,12 @@ const UI = (() => {
       : cleanContent;
   }
 
-  function renderFeaturedThemes() {
-    const themeCounts = ParagraphService.getRecentParagraphs()
-      .reduce((counts, paragraph) => {
-        counts[paragraph.themeName] = (counts[paragraph.themeName] || 0) + 1;
-        return counts;
-      }, {});
+  async function renderFeaturedThemes(paragraphs) {
+    const themeCounts = paragraphs.reduce((counts, paragraph) => {
+      const themeName = paragraph.themeName || paragraph.theme || "未分类";
+      counts[themeName] = (counts[themeName] || 0) + 1;
+      return counts;
+    }, {});
 
     const themes = Object.entries(themeCounts)
       .sort((a, b) => b[1] - a[1])
@@ -109,21 +109,21 @@ const UI = (() => {
     container.innerHTML = paragraphs.map((paragraph) => `
       <article class="paragraph-card paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
         <div class="meta">
-          <span>${paragraph.themeName}</span>
+          <span>${paragraph.themeName || paragraph.theme || "未分类"}</span>
           <span>${formatDate(paragraph.createdAt)}</span>
-          <span>上传者：${paragraph.authorName}</span>
+          <span>上传者：${paragraph.authorName || "系统示例"}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
         <p class="paragraph-content">${getContentSummary(paragraph.content)}</p>
         <div class="meta">
-          ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
+          ${(paragraph.tagNames || []).map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
       </article>
     `).join("");
   }
 
-  function renderParagraphDetail(paragraphId) {
-    const paragraph = ParagraphService.getParagraphById(paragraphId);
+  async function renderParagraphDetail(paragraphId) {
+    const paragraph = await ParagraphService.getParagraphById(paragraphId);
     const container = $("paragraphDetail");
 
     if (!paragraph) {
@@ -139,13 +139,13 @@ const UI = (() => {
     container.innerHTML = `
       <article class="detail-card">
         <div class="meta">
-          <span>${paragraph.themeName}</span>
+          <span>${paragraph.themeName || paragraph.theme || "未分类"}</span>
           <span>${formatDate(paragraph.createdAt)}</span>
-          <span>上传者：${paragraph.authorName}</span>
+          <span>上传者：${paragraph.authorName || "系统示例"}</span>
           <span>收藏：<strong id="detailCollectionCount">${paragraph.collectionCount || 0}</strong></span>
         </div>
         <div class="meta">
-          ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
+          ${(paragraph.tagNames || []).map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
         <p class="detail-content">${paragraph.content}</p>
         <div class="detail-actions">
@@ -159,25 +159,27 @@ const UI = (() => {
     return true;
   }
 
-  function renderHome() {
-    const recent = ParagraphService.getRecentParagraphs(3);
+  async function renderHome() {
+    const paragraphs = await ParagraphService.getRecentParagraphs();
+    const recent = paragraphs.slice(0, 3);
     $("homeRecentList").innerHTML = recent.map((paragraph) => `
       <article class="compact-item paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
         <strong>${getContentSummary(paragraph.content, 48)}</strong>
-        <p class="muted">${paragraph.themeName} · ${paragraph.tagNames.join("、") || "无标签"}</p>
+        <p class="muted">${paragraph.themeName || paragraph.theme || "未分类"} · ${(paragraph.tagNames || []).join("、") || "无标签"}</p>
       </article>
     `).join("");
-    renderFeaturedThemes();
+    await renderFeaturedThemes(paragraphs);
   }
 
-  function renderCorpus(paragraphs = SearchService.getRecentParagraphs()) {
-    $("resultSummary").textContent = paragraphs.length > 0
-      ? `共找到 ${paragraphs.length} 条语段`
+  async function renderCorpus(paragraphs) {
+    const result = paragraphs || await SearchService.getRecentParagraphs();
+    $("resultSummary").textContent = result.length > 0
+      ? `共找到 ${result.length} 条语段`
       : "没有匹配的语段";
-    renderParagraphList("corpusList", paragraphs, "暂无匹配结果，可以换个关键词或主题试试。");
+    renderParagraphList("corpusList", result, "暂无匹配结果，可以换个关键词或主题试试。");
   }
 
-  function renderProfile() {
+  async function renderProfile() {
     const currentUser = AuthService.getCurrentUser();
     if (!currentUser) return false;
 
@@ -186,11 +188,11 @@ const UI = (() => {
     return renderProfileParagraphs();
   }
 
-  function renderProfileParagraphs() {
+  async function renderProfileParagraphs() {
     const currentUser = AuthService.getCurrentUser();
     if (!currentUser) return false;
 
-    const paragraphs = ParagraphService.getParagraphsByUser(currentUser.id);
+    const paragraphs = await ParagraphService.getParagraphsByUser(currentUser.id);
     const container = $("profileList");
 
     if (paragraphs.length === 0) {
@@ -201,13 +203,13 @@ const UI = (() => {
     container.innerHTML = paragraphs.map((paragraph) => `
       <article class="paragraph-card paragraph-detail-link" data-paragraph-id="${paragraph.id}" role="button" tabindex="0">
         <div class="meta">
-          <span>${paragraph.themeName}</span>
+          <span>${paragraph.themeName || paragraph.theme || "未分类"}</span>
           <span>${formatDate(paragraph.createdAt)}</span>
           <span>收藏：${paragraph.collectionCount || 0}</span>
         </div>
         <p class="paragraph-content">${getContentSummary(paragraph.content)}</p>
         <div class="meta">
-          ${paragraph.tagNames.map((name) => `<span class="tag">${name}</span>`).join("")}
+          ${(paragraph.tagNames || []).map((name) => `<span class="tag">${name}</span>`).join("")}
         </div>
         <div class="card-actions">
           <button class="danger-button delete-paragraph-button" data-paragraph-id="${paragraph.id}" type="button">删除</button>
@@ -217,24 +219,24 @@ const UI = (() => {
     return true;
   }
 
-  function renderCollections() {
+  async function renderCollections() {
     const currentUser = AuthService.getCurrentUser();
     if (!currentUser) return false;
 
     renderParagraphList(
       "collectionList",
-      CollectionService.getCollectionsByUser(currentUser.id),
+      await CollectionService.getCollectionsByUser(currentUser.id),
       "你还没有收藏语段。"
     );
     return true;
   }
 
-  function updateDetailCollectionState(paragraphId) {
+  async function updateDetailCollectionState(paragraphId) {
     const currentUser = AuthService.getCurrentUser();
     const isCollected = currentUser
       ? CollectionService.isCollected(currentUser.id, paragraphId)
       : false;
-    const count = CollectionService.getCollectionCount(paragraphId);
+    const count = await CollectionService.getCollectionCount(paragraphId);
     const button = $("toggleCollectionButton");
     const countElement = $("detailCollectionCount");
 

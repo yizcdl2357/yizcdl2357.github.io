@@ -1,0 +1,436 @@
+# 后端与数据库设计方案
+
+## 目标
+
+本项目后端采用统一的数据访问层屏蔽数据库差异：
+
+- 本地测试：使用本地文件型数据库，推荐 SQLite，数据库文件如 `data/english-corpus.sqlite`
+- 网站部署：使用线上 SQL 数据库，推荐 MySQL
+- 业务层不直接依赖具体数据库，只依赖 Repository 接口
+- 通过环境变量切换数据库类型，不修改业务代码
+
+## 推荐技术路线
+
+```text
+Frontend
+  ↓ HTTP / JSON
+Backend API
+  ↓ Service Layer
+Repository Interface
+  ↓
+Local SQLite Adapter 或 MySQL Adapter
+  ↓
+SQLite 文件 或 MySQL 数据库
+```
+
+环境变量建议：
+
+```env
+APP_ENV=local
+DB_CLIENT=sqlite
+DB_FILE=./data/english-corpus.sqlite
+
+# 部署时使用
+DB_CLIENT=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=english_corpus
+DB_USER=your_user
+DB_PASSWORD=your_password
+```
+
+## 后端类图
+
+```mermaid
+classDiagram
+    class ApiServer {
+        +start()
+        +registerRoutes()
+    }
+
+    class AuthController {
+        +register(req, res)
+        +login(req, res)
+        +logout(req, res)
+        +getCurrentUser(req, res)
+    }
+
+    class ParagraphController {
+        +createParagraph(req, res)
+        +getParagraph(req, res)
+        +listParagraphs(req, res)
+        +listMyParagraphs(req, res)
+        +deleteParagraph(req, res)
+    }
+
+    class CollectionController {
+        +collectParagraph(req, res)
+        +uncollectParagraph(req, res)
+        +listMyCollections(req, res)
+        +getCollectionCount(req, res)
+    }
+
+    class AuthService {
+        +register(username, password)
+        +login(username, password)
+        +logout(sessionId)
+        +getCurrentUser(sessionId)
+    }
+
+    class ParagraphService {
+        +createParagraph(userId, content, theme, tags)
+        +getParagraphById(id)
+        +searchParagraphs(keyword, theme, tags)
+        +getParagraphsByUser(userId)
+        +deleteParagraph(userId, paragraphId)
+    }
+
+    class CollectionService {
+        +collectParagraph(userId, paragraphId)
+        +uncollectParagraph(userId, paragraphId)
+        +getCollectionsByUser(userId)
+        +getCollectionCount(paragraphId)
+        +isCollected(userId, paragraphId)
+    }
+
+    class ThemeService {
+        +detectTheme(content)
+    }
+
+    class OCRService {
+        +recognizeText(image)
+    }
+
+    class UserRepository {
+        <<interface>>
+        +create(user)
+        +findById(id)
+        +findByUsername(username)
+    }
+
+    class ParagraphRepository {
+        <<interface>>
+        +create(paragraph)
+        +findById(id)
+        +findByUserId(userId)
+        +search(keyword, theme, tags)
+        +deleteById(id)
+    }
+
+    class CollectionRepository {
+        <<interface>>
+        +create(collection)
+        +delete(userId, paragraphId)
+        +findByUserId(userId)
+        +countByParagraphId(paragraphId)
+        +exists(userId, paragraphId)
+        +deleteByParagraphId(paragraphId)
+    }
+
+    class TagRepository {
+        <<interface>>
+        +findAll()
+        +findByName(name)
+    }
+
+    class DatabaseProvider {
+        +connect()
+        +getClient()
+    }
+
+    class SQLiteDatabaseProvider {
+        +connect(filePath)
+    }
+
+    class MySQLDatabaseProvider {
+        +connect(host, port, database, user, password)
+    }
+
+    class SQLiteUserRepository
+    class SQLiteParagraphRepository
+    class SQLiteCollectionRepository
+    class SQLiteTagRepository
+
+    class MySQLUserRepository
+    class MySQLParagraphRepository
+    class MySQLCollectionRepository
+    class MySQLTagRepository
+
+    ApiServer --> AuthController
+    ApiServer --> ParagraphController
+    ApiServer --> CollectionController
+
+    AuthController --> AuthService
+    ParagraphController --> ParagraphService
+    CollectionController --> CollectionService
+
+    ParagraphService --> ThemeService
+    ParagraphService --> ParagraphRepository
+    ParagraphService --> CollectionRepository
+    AuthService --> UserRepository
+    CollectionService --> CollectionRepository
+    CollectionService --> ParagraphRepository
+
+    DatabaseProvider <|-- SQLiteDatabaseProvider
+    DatabaseProvider <|-- MySQLDatabaseProvider
+
+    UserRepository <|.. SQLiteUserRepository
+    ParagraphRepository <|.. SQLiteParagraphRepository
+    CollectionRepository <|.. SQLiteCollectionRepository
+    TagRepository <|.. SQLiteTagRepository
+
+    UserRepository <|.. MySQLUserRepository
+    ParagraphRepository <|.. MySQLParagraphRepository
+    CollectionRepository <|.. MySQLCollectionRepository
+    TagRepository <|.. MySQLTagRepository
+
+    SQLiteUserRepository --> SQLiteDatabaseProvider
+    SQLiteParagraphRepository --> SQLiteDatabaseProvider
+    SQLiteCollectionRepository --> SQLiteDatabaseProvider
+    SQLiteTagRepository --> SQLiteDatabaseProvider
+
+    MySQLUserRepository --> MySQLDatabaseProvider
+    MySQLParagraphRepository --> MySQLDatabaseProvider
+    MySQLCollectionRepository --> MySQLDatabaseProvider
+    MySQLTagRepository --> MySQLDatabaseProvider
+```
+
+## 数据库 ER 图
+
+```mermaid
+erDiagram
+    users {
+        string id PK
+        string username UK
+        string password_hash
+        datetime created_at
+    }
+
+    paragraphs {
+        string id PK
+        text content
+        string author_id FK
+        string theme
+        datetime created_at
+        datetime updated_at
+    }
+
+    tags {
+        string id PK
+        string name UK
+    }
+
+    paragraph_tags {
+        string paragraph_id FK
+        string tag_id FK
+    }
+
+    collections {
+        string id PK
+        string user_id FK
+        string paragraph_id FK
+        datetime created_at
+    }
+
+    users ||--o{ paragraphs : uploads
+    users ||--o{ collections : owns
+    paragraphs ||--o{ collections : collected_by
+    paragraphs ||--o{ paragraph_tags : has
+    tags ||--o{ paragraph_tags : belongs_to
+```
+
+## 数据表说明
+
+### users
+
+保存用户账号信息。
+
+```text
+id              主键，建议 UUID
+username        唯一用户名
+password_hash   密码哈希，不保存明文密码
+created_at      注册时间
+```
+
+### paragraphs
+
+保存所有语段。
+
+```text
+id          主键，建议 UUID
+content     语段正文
+author_id   上传者，对应 users.id
+theme       作文主题
+created_at  创建时间
+updated_at  更新时间
+```
+
+### tags
+
+保存允许选择的固定标签枚举。
+
+```text
+开头
+结尾
+过渡
+应用文
+读后续写
+议论
+名言
+动作
+心理活动
+高级表达
+```
+
+### paragraph_tags
+
+语段与标签的多对多关联表。
+
+### collections
+
+保存用户收藏关系。应限制同一用户不能重复收藏同一语段。
+
+```text
+unique(user_id, paragraph_id)
+```
+
+## 数据库切换策略
+
+```mermaid
+flowchart TD
+    A["读取环境变量 DB_CLIENT"] --> B{DB_CLIENT}
+    B -->|"sqlite"| C["创建 SQLiteDatabaseProvider"]
+    B -->|"mysql"| D["创建 MySQLDatabaseProvider"]
+    C --> E["绑定 SQLite Repository 实现"]
+    D --> F["绑定 MySQL Repository 实现"]
+    E --> G["Service 层使用统一 Repository 接口"]
+    F --> G
+```
+
+## 上传语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 前端上传页
+    participant ParagraphController as ParagraphController
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ThemeService as ThemeService
+    participant ParagraphRepository as ParagraphRepository
+    participant TagRepository as TagRepository
+    participant DB as 数据库
+
+    User->>Frontend: 填写内容、主题、标签并提交
+    Frontend->>ParagraphController: POST /api/paragraphs
+    ParagraphController->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>ParagraphController: 返回当前用户
+    ParagraphController->>ParagraphService: createParagraph(userId, content, theme, tags)
+    ParagraphService->>ThemeService: detectTheme(content)
+    ThemeService-->>ParagraphService: 返回推荐主题或空
+    ParagraphService->>TagRepository: validateTags(tags)
+    TagRepository->>DB: 查询标签是否存在
+    DB-->>TagRepository: 返回标签结果
+    ParagraphService->>ParagraphRepository: create(paragraph)
+    ParagraphRepository->>DB: 写入 paragraphs 和 paragraph_tags
+    DB-->>ParagraphRepository: 返回保存结果
+    ParagraphRepository-->>ParagraphService: 返回新语段
+    ParagraphService-->>ParagraphController: 返回上传结果
+    ParagraphController-->>Frontend: 返回语段ID
+    Frontend-->>User: 跳转至语段展示界面
+```
+
+## 搜索语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 语料库界面
+    participant ParagraphController as ParagraphController
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as ParagraphRepository
+    participant CollectionRepository as CollectionRepository
+    participant DB as 数据库
+
+    User->>Frontend: 输入关键词 / 选择主题 / 选择标签
+    Frontend->>ParagraphController: GET /api/paragraphs?keyword=&theme=&tags=
+    ParagraphController->>ParagraphService: searchParagraphs(keyword, theme, tags)
+    ParagraphService->>ParagraphRepository: search(keyword, theme, tags)
+    ParagraphRepository->>DB: 查询匹配语段
+    DB-->>ParagraphRepository: 返回语段列表
+    ParagraphService->>CollectionRepository: attachCollectionCounts(paragraphs)
+    CollectionRepository->>DB: 统计收藏数
+    DB-->>CollectionRepository: 返回收藏数
+    ParagraphService-->>ParagraphController: 返回按收藏数排序的语段列表
+    ParagraphController-->>Frontend: 返回语段列表
+    Frontend-->>User: 展示正文预览、主题、标签和收藏数
+```
+
+## 删除语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 用户主页
+    participant ParagraphController as ParagraphController
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as ParagraphRepository
+    participant CollectionRepository as CollectionRepository
+    participant DB as 数据库
+
+    User->>Frontend: 点击删除并确认
+    Frontend->>ParagraphController: DELETE /api/paragraphs/{id}
+    ParagraphController->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>ParagraphController: 返回当前用户
+    ParagraphController->>ParagraphService: deleteParagraph(userId, paragraphId)
+    ParagraphService->>ParagraphRepository: findById(paragraphId)
+    ParagraphRepository->>DB: 查询语段
+    DB-->>ParagraphRepository: 返回语段
+    ParagraphService->>CollectionRepository: deleteByParagraphId(paragraphId)
+    CollectionRepository->>DB: 删除该语段相关收藏
+    ParagraphService->>ParagraphRepository: deleteById(paragraphId)
+    ParagraphRepository->>DB: 删除 paragraph_tags 和 paragraphs
+    DB-->>ParagraphRepository: 返回删除结果
+    ParagraphService-->>ParagraphController: 返回删除成功
+    ParagraphController-->>Frontend: 返回删除成功
+    Frontend-->>User: 刷新我的上传列表
+```
+
+## API 草案
+
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
+
+GET    /api/paragraphs
+POST   /api/paragraphs
+GET    /api/paragraphs/:id
+DELETE /api/paragraphs/:id
+GET    /api/me/paragraphs
+
+POST   /api/paragraphs/:id/collections
+DELETE /api/paragraphs/:id/collections
+GET    /api/me/collections
+
+POST   /api/ocr
+POST   /api/themes/detect
+```
+
+## 本地与部署数据库建议
+
+本地测试推荐 SQLite，因为它就是一个本地文件，便于提交 schema、备份和重置；部署时使用 MySQL，连接信息放入环境变量，不提交真实密码。
+
+后端启动时根据 `DB_CLIENT` 决定使用 SQLite 还是 MySQL。两者使用相同表结构和 Repository 接口，避免业务代码分叉。
+
+## 注意事项
+
+- `.env` 不应提交到 GitHub
+- 应提交 `.env.example`
+- 应提交数据库迁移脚本，如 `database/migrations`
+- 本地 SQLite 文件可不提交，只提交建表脚本和种子数据
+- 密码只保存哈希值，禁止保存明文密码
+- 删除语段时应同步删除 `paragraph_tags` 和 `collections` 中的关联记录
+- 标签表只保留允许枚举中的 10 个标签
