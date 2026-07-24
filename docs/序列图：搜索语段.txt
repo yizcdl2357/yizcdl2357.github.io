@@ -1,0 +1,35 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant CorpusPage as 语料库界面
+    participant API as 共享Backend API
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as MySQLParagraphRepository
+    participant DB as 云端MySQL
+
+    User->>CorpusPage: 输入关键词 / 选择主题 / 选择标签
+    User->>CorpusPage: 点击搜索
+    CorpusPage->>API: GET /api/paragraphs?keyword=&theme=&tags=
+    API->>ParagraphService: searchParagraphs(keyword, themeId, tags)
+    ParagraphService->>ParagraphRepository: findByConditionsWithCollectionCounts(...)
+    ParagraphRepository->>DB: 查询共享数据并按收藏数排序
+    DB-->>ParagraphRepository: 返回匹配语段列表
+    ParagraphRepository-->>ParagraphService: 返回搜索结果
+    ParagraphService-->>API: 返回搜索结果
+    API-->>CorpusPage: 返回按收藏数排序的结果
+    CorpusPage->>CorpusPage: formatParagraphPreview(maxLength=300)
+    CorpusPage-->>User: 展示搜索结果正文预览、主题、标签和收藏数
+```
+
+搜索规则表
+规则编号	条件	系统行为
+S1	未输入关键词、未选择主题、未选择标签	展示按收藏数排序的语段
+S2	只选择主题	展示该主题下按收藏数排序的语段
+S3	只输入关键词	展示内容中包含关键词且按收藏数排序的语段
+S4	只选择标签	展示包含该标签且按收藏数排序的语段
+S5	同时使用多个条件	展示同时满足条件且按收藏数排序的语段
+S6	无匹配结果	显示空结果提示
+S7	展示搜索结果列表	每篇语段不显示标题
+S8	正文字符数大于300	仅显示前300字并追加省略号
+S9	正文字符数不超过300	显示完整正文
+S10	任意设备执行搜索	搜索同一云端数据库中的共享语段

@@ -1,0 +1,658 @@
+# 后端与数据库设计方案
+
+## 目标
+
+本项目后端采用统一的数据访问层屏蔽数据库差异，并按使用场景选择数据源：
+
+- 单机开发：使用本地文件型 SQLite，数据库文件如 `data/english-corpus.sqlite`
+- 跨设备联调与验收测试：所有设备访问同一个已部署的 Backend API，由后端连接共享云端 MySQL
+- 生产环境：Backend API 连接云端 MySQL，不允许浏览器直接连接数据库
+- 业务层不直接依赖具体数据库，只依赖 Repository 接口
+- 通过环境变量切换数据库类型，不修改业务代码
+- SQLite 中的数据只属于运行该后端的单台电脑，不能用于跨设备共享
+
+## 推荐技术路线
+
+```text
+Browser / Mobile Browser
+  ↓ HTTPS / JSON
+Shared Backend API
+  ↓ Service Layer
+Repository Interface
+  ↓
+Local SQLite Adapter 或 MySQL Adapter
+  ↓
+单机 SQLite 文件 或共享云端 MySQL
+```
+
+环境变量建议：
+
+```env
+APP_ENV=local
+DB_CLIENT=sqlite
+DB_FILE=./data/english-corpus.sqlite
+
+# 跨设备测试及生产部署时使用
+APP_ENV=test
+DB_CLIENT=mysql
+DB_HOST=your-cloud-mysql-host
+DB_PORT=3306
+DB_NAME=english_corpus
+DB_USER=your_user
+DB_PASSWORD=your_password
+DB_SSL=true
+```
+
+## 跨设备共享部署图
+
+```mermaid
+flowchart LR
+    subgraph Clients["多台测试设备"]
+        A["电脑浏览器"]
+        B["手机浏览器"]
+        C["平板浏览器"]
+    end
+
+    API["共享 Backend API<br/>HTTPS / JSON<br/>统一鉴权与业务规则"]
+    DB[("云端 MySQL<br/>共享用户、语段、标签、收藏数据")]
+    Backup[("自动备份")]
+
+    A -->|HTTPS| API
+    B -->|HTTPS| API
+    C -->|HTTPS| API
+    API -->|连接池 + TLS| DB
+    DB -.->|定时备份| Backup
+```
+
+约束：测试设备只保存会话凭据，不保存权威业务数据；所有设备经同一个 API 读写云端 MySQL，因此可以看到一致的用户、语段和收藏数据。
+
+## 后端类图
+
+```mermaid
+classDiagram
+    class ApiServer {
+        +start()
+        +registerRoutes()
+    }
+
+    class AuthController {
+        +register(req, res)
+        +login(req, res)
+        +logout(req, res)
+        +getCurrentUser(req, res)
+    }
+
+    class ParagraphController {
+        +createParagraph(req, res)
+        +getParagraph(req, res)
+        +listParagraphs(req, res)
+        +listMyParagraphs(req, res)
+        +deleteParagraph(req, res)
+    }
+
+    class CollectionController {
+        +collectParagraph(req, res)
+        +uncollectParagraph(req, res)
+        +listMyCollections(req, res)
+        +getCollectionCount(req, res)
+    }
+
+    class AuthService {
+        +register(username, password)
+        +login(username, password)
+        +logout(sessionId)
+        +getCurrentUser(sessionId)
+    }
+
+    class ParagraphService {
+        +createParagraph(userId, content, theme, tags)
+        +getParagraphById(id)
+        +searchParagraphs(keyword, theme, tags)
+        +getParagraphsByUser(userId)
+        +deleteParagraph(userId, paragraphId)
+    }
+
+    class CollectionService {
+        +collectParagraph(userId, paragraphId)
+        +uncollectParagraph(userId, paragraphId)
+        +getCollectionsByUser(userId)
+        +getCollectionCount(paragraphId)
+        +isCollected(userId, paragraphId)
+    }
+
+    class ThemeService {
+        +detectTheme(content)
+    }
+
+    class OCRService {
+        +recognizeText(image)
+    }
+
+    class UserRepository {
+        <<interface>>
+        +create(user)
+        +findById(id)
+        +findByUsername(username)
+    }
+
+    class ParagraphRepository {
+        <<interface>>
+        +create(paragraph)
+        +findById(id)
+        +findByUserId(userId)
+        +search(keyword, theme, tags)
+        +deleteById(id)
+    }
+
+    class CollectionRepository {
+        <<interface>>
+        +create(collection)
+        +delete(userId, paragraphId)
+        +findByUserId(userId)
+        +countByParagraphId(paragraphId)
+        +exists(userId, paragraphId)
+        +deleteByParagraphId(paragraphId)
+    }
+
+    class TagRepository {
+        <<interface>>
+        +findAll()
+        +findByName(name)
+    }
+
+    class DatabaseProvider {
+        +connect()
+        +getClient()
+    }
+
+    class DatabaseConfig {
+        +string appEnv
+        +string dbClient
+        +string dbFile
+        +string dbHost
+        +int dbPort
+        +string dbName
+        +bool dbSSL
+        +validate()
+    }
+
+    class SQLiteDatabaseProvider {
+        +connect(filePath)
+    }
+
+    class MySQLDatabaseProvider {
+        +connect(host, port, database, user, password, ssl)
+        +createConnectionPool()
+    }
+
+    class LocalSQLiteFile {
+        <<local file>>
+        data/english-corpus.sqlite
+        single-device development only
+    }
+
+    class CloudMySQLDatabase {
+        <<cloud database>>
+        shared test and production data
+        TLS enabled
+        automatic backup
+    }
+
+    class SQLiteUserRepository
+    class SQLiteParagraphRepository
+    class SQLiteCollectionRepository
+    class SQLiteTagRepository
+
+    class MySQLUserRepository
+    class MySQLParagraphRepository
+    class MySQLCollectionRepository
+    class MySQLTagRepository
+
+    ApiServer --> AuthController
+    ApiServer --> ParagraphController
+    ApiServer --> CollectionController
+
+    AuthController --> AuthService
+    ParagraphController --> ParagraphService
+    CollectionController --> CollectionService
+
+    ParagraphService --> ThemeService
+    ParagraphService --> ParagraphRepository
+    ParagraphService --> CollectionRepository
+    AuthService --> UserRepository
+    CollectionService --> CollectionRepository
+    CollectionService --> ParagraphRepository
+
+    DatabaseProvider <|-- SQLiteDatabaseProvider
+    DatabaseProvider <|-- MySQLDatabaseProvider
+    DatabaseConfig --> DatabaseProvider : selects and configures
+    SQLiteDatabaseProvider --> LocalSQLiteFile : opens local file
+    MySQLDatabaseProvider --> CloudMySQLDatabase : pooled TLS connection
+
+    UserRepository <|.. SQLiteUserRepository
+    ParagraphRepository <|.. SQLiteParagraphRepository
+    CollectionRepository <|.. SQLiteCollectionRepository
+    TagRepository <|.. SQLiteTagRepository
+
+    UserRepository <|.. MySQLUserRepository
+    ParagraphRepository <|.. MySQLParagraphRepository
+    CollectionRepository <|.. MySQLCollectionRepository
+    TagRepository <|.. MySQLTagRepository
+
+    SQLiteUserRepository --> SQLiteDatabaseProvider
+    SQLiteParagraphRepository --> SQLiteDatabaseProvider
+    SQLiteCollectionRepository --> SQLiteDatabaseProvider
+    SQLiteTagRepository --> SQLiteDatabaseProvider
+
+    MySQLUserRepository --> MySQLDatabaseProvider
+    MySQLParagraphRepository --> MySQLDatabaseProvider
+    MySQLCollectionRepository --> MySQLDatabaseProvider
+    MySQLTagRepository --> MySQLDatabaseProvider
+```
+
+## 数据库 ER 图
+
+```mermaid
+erDiagram
+    users {
+        string id PK
+        string username UK
+        string password_hash
+        datetime created_at
+    }
+
+    paragraphs {
+        string id PK
+        text content
+        string author_id FK
+        string theme
+        datetime created_at
+        datetime updated_at
+    }
+
+    tags {
+        string id PK
+        string name UK
+    }
+
+    paragraph_tags {
+        string paragraph_id FK
+        string tag_id FK
+    }
+
+    collections {
+        string id PK
+        string user_id FK
+        string paragraph_id FK
+        datetime created_at
+    }
+
+    users ||--o{ paragraphs : uploads
+    users ||--o{ collections : owns
+    paragraphs ||--o{ collections : collected_by
+    paragraphs ||--o{ paragraph_tags : has
+    tags ||--o{ paragraph_tags : belongs_to
+```
+
+## 数据表说明
+
+### users
+
+保存用户账号信息。
+
+```text
+id              主键，建议 UUID
+username        唯一用户名
+password_hash   密码哈希，不保存明文密码
+created_at      注册时间
+```
+
+### paragraphs
+
+保存所有语段。
+
+```text
+id          主键，建议 UUID
+content     语段正文
+author_id   上传者，对应 users.id
+theme       作文主题
+created_at  创建时间
+updated_at  更新时间
+```
+
+### tags
+
+保存允许选择的固定标签枚举。
+
+```text
+开头
+结尾
+过渡
+应用文
+读后续写
+议论
+名言
+动作
+心理活动
+高级表达
+```
+
+### paragraph_tags
+
+语段与标签的多对多关联表。
+
+### collections
+
+保存用户收藏关系。应限制同一用户不能重复收藏同一语段。
+
+```text
+unique(user_id, paragraph_id)
+```
+
+## 数据库切换策略
+
+```mermaid
+flowchart TD
+    A["读取 APP_ENV 与 DB_CLIENT"] --> B{运行场景}
+    B -->|"单机开发"| C["DB_CLIENT=sqlite"]
+    B -->|"跨设备联调 / 验收 / 生产"| D["DB_CLIENT=mysql"]
+    C --> E["创建 SQLiteDatabaseProvider"]
+    D --> F["校验云端连接信息与 DB_SSL"]
+    F --> G["创建 MySQLDatabaseProvider 与连接池"]
+    E --> H["绑定 SQLite Repository 实现"]
+    G --> I["绑定 MySQL Repository 实现"]
+    H --> J["Service 层使用统一 Repository 接口"]
+    I --> J
+    J --> K{是否需要跨设备共享}
+    K -->|"否"| L["访问本机 SQLite 文件"]
+    K -->|"是"| M["所有设备访问共享 API 和云端 MySQL"]
+```
+
+## 跨设备读取共享数据序列图
+
+```mermaid
+sequenceDiagram
+    actor UserA as 设备A用户
+    participant ClientA as 设备A浏览器
+    participant API as 共享Backend API
+    participant Service as ParagraphService
+    participant Repository as MySQLParagraphRepository
+    participant DB as 云端MySQL
+    actor UserB as 设备B用户
+    participant ClientB as 设备B浏览器
+
+    UserA->>ClientA: 上传语段
+    ClientA->>API: POST /api/paragraphs（携带会话）
+    API->>Service: createParagraph(userId, data)
+    Service->>Repository: create(paragraph)
+    Repository->>DB: 事务写入共享数据
+    DB-->>Repository: 提交成功
+    API-->>ClientA: 返回语段ID
+
+    UserB->>ClientB: 打开语料库
+    ClientB->>API: GET /api/paragraphs
+    API->>Service: searchParagraphs(...)
+    Service->>Repository: search(...)
+    Repository->>DB: 查询同一共享数据库
+    DB-->>Repository: 返回包含新语段的列表
+    API-->>ClientB: 返回共享语段列表
+    ClientB-->>UserB: 展示设备A上传的语段
+```
+
+## 上传语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 前端上传页
+    participant ParagraphController as ParagraphController
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ThemeService as ThemeService
+    participant ParagraphRepository as ParagraphRepository
+    participant TagRepository as TagRepository
+    participant DB as 数据库
+
+    User->>Frontend: 填写内容、主题、标签并提交
+    Frontend->>ParagraphController: POST /api/paragraphs
+    ParagraphController->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>ParagraphController: 返回当前用户
+    ParagraphController->>ParagraphService: createParagraph(userId, content, theme, tags)
+    ParagraphService->>ThemeService: detectTheme(content)
+    ThemeService-->>ParagraphService: 返回推荐主题或空
+    ParagraphService->>TagRepository: validateTags(tags)
+    TagRepository->>DB: 查询标签是否存在
+    DB-->>TagRepository: 返回标签结果
+    ParagraphService->>ParagraphRepository: create(paragraph)
+    ParagraphRepository->>DB: 写入 paragraphs 和 paragraph_tags
+    DB-->>ParagraphRepository: 返回保存结果
+    ParagraphRepository-->>ParagraphService: 返回新语段
+    ParagraphService-->>ParagraphController: 返回上传结果
+    ParagraphController-->>Frontend: 返回语段ID
+    Frontend-->>User: 跳转至语段展示界面
+```
+
+## 搜索语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 语料库界面
+    participant ParagraphController as ParagraphController
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as ParagraphRepository
+    participant CollectionRepository as CollectionRepository
+    participant DB as 数据库
+
+    User->>Frontend: 输入关键词 / 选择主题 / 选择标签
+    Frontend->>ParagraphController: GET /api/paragraphs?keyword=&theme=&tags=
+    ParagraphController->>ParagraphService: searchParagraphs(keyword, theme, tags)
+    ParagraphService->>ParagraphRepository: search(keyword, theme, tags)
+    ParagraphRepository->>DB: 查询匹配语段
+    DB-->>ParagraphRepository: 返回语段列表
+    ParagraphService->>CollectionRepository: attachCollectionCounts(paragraphs)
+    CollectionRepository->>DB: 统计收藏数
+    DB-->>CollectionRepository: 返回收藏数
+    ParagraphService-->>ParagraphController: 返回按收藏数排序的语段列表
+    ParagraphController-->>Frontend: 返回语段列表
+    Frontend-->>User: 展示正文预览、主题、标签和收藏数
+```
+
+## 删除语段后端序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 用户主页
+    participant ParagraphController as ParagraphController
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as ParagraphRepository
+    participant CollectionRepository as CollectionRepository
+    participant DB as 数据库
+
+    User->>Frontend: 点击删除并确认
+    Frontend->>ParagraphController: DELETE /api/paragraphs/{id}
+    ParagraphController->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>ParagraphController: 返回当前用户
+    ParagraphController->>ParagraphService: deleteParagraph(userId, paragraphId)
+    ParagraphService->>ParagraphRepository: findById(paragraphId)
+    ParagraphRepository->>DB: 查询语段
+    DB-->>ParagraphRepository: 返回语段
+    ParagraphService->>CollectionRepository: deleteByParagraphId(paragraphId)
+    CollectionRepository->>DB: 删除该语段相关收藏
+    ParagraphService->>ParagraphRepository: deleteById(paragraphId)
+    ParagraphRepository->>DB: 删除 paragraph_tags 和 paragraphs
+    DB-->>ParagraphRepository: 返回删除结果
+    ParagraphService-->>ParagraphController: 返回删除成功
+    ParagraphController-->>Frontend: 返回删除成功
+    Frontend-->>User: 刷新我的上传列表
+```
+
+## API 草案
+
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
+
+GET    /api/paragraphs
+POST   /api/paragraphs
+GET    /api/paragraphs/:id
+DELETE /api/paragraphs/:id
+GET    /api/me/paragraphs
+
+POST   /api/paragraphs/:id/collections
+DELETE /api/paragraphs/:id/collections
+GET    /api/me/collections
+
+POST   /api/ocr
+POST   /api/themes/detect
+```
+
+## 本地与共享环境数据库建议
+
+单机开发推荐 SQLite，因为它就是一个本地文件，便于执行 schema、备份和重置。SQLite 文件不会自动同步到其他电脑，因此不能承担跨设备联调或验收测试的数据共享。
+
+跨设备联调、验收测试和生产环境均使用已部署的共享 Backend API 与云端 MySQL。数据库连接信息只配置在后端运行环境中；浏览器只知道 API 地址，不应获得数据库主机、账号或密码。
+
+后端启动时根据 `APP_ENV` 和 `DB_CLIENT` 决定使用 SQLite 还是 MySQL。两者使用相同迁移版本、表结构和 Repository 接口，避免业务代码分叉。测试环境与生产环境应使用不同的 MySQL 数据库和凭据，防止测试数据污染生产数据。
+
+## 注意事项
+
+- `.env` 不应提交到 GitHub
+- 应提交 `.env.example`
+- 应提交数据库迁移脚本，如 `database/migrations`
+- 本地 SQLite 文件可不提交，只提交建表脚本和种子数据
+- 跨设备测试必须访问同一个已部署的 API 地址，不能让每台设备分别运行 SQLite
+- 云端数据库禁止开放给浏览器直连，只允许后端服务器通过私有网络或 IP 白名单访问
+- 测试 MySQL 与生产 MySQL 使用不同数据库、账号和最小权限
+- MySQL 连接启用 TLS、连接池、健康检查、自动备份和恢复演练
+- 密码只保存哈希值，禁止保存明文密码
+- 删除语段时应同步删除 `paragraph_tags` 和 `collections` 中的关联记录
+- 标签表只保留允许枚举中的 10 个标签
+
+## Railway 上线落地方案
+
+### 部署边界
+
+- 前端保持部署在 `https://yizcdl2357.github.io/eng/`，浏览器只请求 Railway 对外的 HTTPS API，不获取 MySQL 连接信息。
+- Node.js Backend API 部署在 Railway Web Service，运行迁移脚本、业务服务、CORS 校验和 MySQL 连接池。
+- 云端 MySQL 为 `mysql6.sqlpub.com:3311`，数据库名 `yizcdl2357eng`，账号 `yizcdl2357`。这些值通过 Railway Variables 注入，不写入前端代码。
+- MySQL 密码、`SESSION_SECRET` 等敏感值只存在 Railway Secret/Variable 中，禁止写入文档、Git、日志或构建产物。
+- MySQL 的 TLS 参数以服务商实际支持为准，由 `DB_SSL` 显式配置；不在代码中猜测或强制错误的证书模式。
+
+### Railway 部署图
+
+```mermaid
+flowchart LR
+    User["用户浏览器"]
+
+    subgraph GitHubPages["GitHub Pages"]
+        Frontend["/eng 静态前端<br/>HTML / CSS / JavaScript"]
+    end
+
+    subgraph Railway["Railway"]
+        Edge["Railway HTTPS 公网域名"]
+        API["Node.js Backend API<br/>Controller / Service / Repository"]
+        Cors["CORS Policy<br/>精确允许 GitHub Pages Origin"]
+        Env["Variables / Secrets<br/>DB_* / CORS_ORIGIN / SESSION_SECRET<br/>SYSTEM_USER_ID"]
+    end
+
+    DB[("Cloud MySQL<br/>mysql6.sqlpub.com:3311<br/>database: yizcdl2357eng")]
+
+    User -->|"GET https://yizcdl2357.github.io/eng/"| Frontend
+    Frontend -->|"HTTPS JSON + credentials"| Edge
+    Edge --> API
+    Cors --> API : validates Origin and preflight
+    Env --> API : injects runtime configuration
+    API -->|"MySQL connection pool"| DB
+    Frontend -.->|"never connects directly"| DB
+```
+
+### CORS 与会话凭据
+
+```text
+CORS_ORIGIN=https://yizcdl2357.github.io
+```
+
+- CORS 匹配的是 Origin，因此不包含 `/eng/` 路径；不使用 `*` 与凭据请求组合。
+- API 对允许的 Origin 返回 `Access-Control-Allow-Origin: https://yizcdl2357.github.io` 和 `Access-Control-Allow-Credentials: true`。
+- 预检 `OPTIONS` 必须允许实际使用的 `GET/POST/DELETE` 和 `Content-Type`，不扩大到未使用的来源、方法或请求头。
+- 如继续使用 Cookie 会话，生产 Cookie 必须为 `Secure; HttpOnly; SameSite=None`，前端 `ApiClient` 使用 `credentials: include`。
+- 未通过 CORS 校验的请求不返回凭据头；后端仍需执行会话鉴权，CORS 不代替身份认证。
+
+### Railway Variables / Secrets
+
+```env
+APP_ENV=production
+DB_CLIENT=mysql
+DB_HOST=mysql6.sqlpub.com
+DB_PORT=3311
+DB_NAME=yizcdl2357eng
+DB_USER=yizcdl2357
+DB_PASSWORD=<Railway Secret，不入库>
+DB_SSL=<按 MySQL 服务商要求配置>
+CORS_ORIGIN=https://yizcdl2357.github.io
+SESSION_SECRET=<Railway Secret，不入库>
+SYSTEM_USER_ID=<稳定的系统用户 ID>
+```
+
+Railway 的 Start Command 只启动 API；数据库 schema 迁移应作为一次性 Release/Deploy 步骤或受控手工命令，避免多实例同时运行迁移。
+
+## 例句数据迁移设计
+
+### 迁移范围
+
+| 数据 | 是否迁移 | 云端归属/行为 |
+| --- | --- | --- |
+| 例句正文 | 是 | 写入 `paragraphs.content` |
+| 作文主题 | 是 | 写入 `paragraphs.theme` |
+| 标签 | 是 | 按名称 upsert `tags`，写入 `paragraph_tags` |
+| 原作者/用户 | 否 | 不复制本地用户；例句统一绑定 `SYSTEM_USER_ID` |
+| 收藏 | 否 | 不复制 `collections`，云端初始收藏数为 0 |
+| 会话/登录态 | 否 | 不属于语料数据，禁止迁移 |
+
+系统用户使用稳定 ID 和保留用户名，迁移前幂等创建。该账号不使用用户截图中的密码，不允许通过普通登录流程获得。数据库如暂无 `is_system` 字段，则使用随机不可用密码哈希并由应用层禁止登录。
+
+### 迁移序列图
+
+```mermaid
+sequenceDiagram
+    actor Operator as 部署人员
+    participant Source as 本地语料数据源(只读)
+    participant Migrator as Railway 迁移脚本
+    participant SystemUser as SystemUserResolver
+    participant ParagraphRepo as MySQLParagraphRepository
+    participant TagRepo as MySQLTagRepository
+    participant DB as Cloud MySQL
+
+    Operator->>DB: 备份目标库并执行 schema migration
+    Operator->>Migrator: 启动一次性语料迁移
+    Migrator->>SystemUser: ensureSystemUser(SYSTEM_USER_ID)
+    SystemUser->>DB: 幂等创建/查找系统用户
+    DB-->>SystemUser: 返回系统用户
+    Migrator->>Source: 只读提取 content / theme / tagNames
+    Source-->>Migrator: 返回待迁移例句
+
+    loop 每条例句（幂等键/内容摘要去重）
+        Migrator->>TagRepo: upsertByNames(tagNames)
+        TagRepo->>DB: 仅写入允许的标签
+        Migrator->>ParagraphRepo: upsert(content, theme, SYSTEM_USER_ID)
+        ParagraphRepo->>DB: 事务写入 paragraphs / paragraph_tags
+        DB-->>ParagraphRepo: 提交或回滚单条记录
+    end
+
+    Migrator->>DB: 校验语段数、标签关联数、系统用户归属
+    DB-->>Migrator: 返回校验结果
+    Migrator-->>Operator: 输出新增/跳过/失败数（不输出凭据）
+```
+
+### 迁移安全与验收
+
+1. 对源数据只读，迁移前备份目标 MySQL；失败时可依备份回滚。
+2. 脚本必须幂等：重试时根据稳定 ID 或正文摘要跳过已迁移例句，不重复创建标签。
+3. 迁移后校验所有新例句的 `author_id = SYSTEM_USER_ID`，并确认未新增本地用户、未写入收藏记录。
+4. 数量、失败 ID 和校验摘要可记录；数据库密码、Cookie、Session Secret 和完整连接串不得出现在日志中。
+5. 迁移完成后通过 Railway API 查询语料库，从 GitHub Pages 执行 CORS 真实请求，确认正文、主题和标签可见且收藏初始为 0。

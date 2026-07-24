@@ -1,0 +1,33 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant UserProfilePage as 用户主页
+    participant CollectionPage as 我的收藏界面
+    participant API as 共享Backend API
+    participant AuthService as AuthService
+    participant CollectionService as CollectionService
+    participant CollectionRepository as MySQLCollectionRepository
+    participant DB as 云端MySQL
+
+    User->>UserProfilePage: 点击我的收藏
+    UserProfilePage->>CollectionPage: goToMyCollections()
+    CollectionPage->>API: GET /api/me/collections（携带会话）
+    API->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>API: 返回当前用户
+    API->>CollectionService: getCollectionsByUser(userId)
+    CollectionService->>CollectionRepository: findCollectedParagraphs(userId)
+    CollectionRepository->>DB: 查询共享收藏及语段数据
+    DB-->>CollectionRepository: 返回收藏语段和收藏数
+    CollectionRepository-->>CollectionService: 返回收藏语段列表
+    CollectionService-->>API: 返回带收藏数的收藏语段列表
+    API-->>CollectionPage: 返回收藏语段列表
+    CollectionPage-->>User: 展示我收藏的语段
+```
+
+查看收藏规则表
+规则编号	条件	系统行为
+C1	用户未登录	跳转到登录界面
+C2	用户已登录且收藏过语段	展示用户收藏的语段列表和收藏数
+C3	用户没有收藏语段	显示“你还没有收藏语段”
+C4	用户点击收藏语段	进入对应语段展示界面
+C5	用户从其他设备登录	展示该账号在云端保存的同一收藏列表

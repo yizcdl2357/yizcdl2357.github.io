@@ -1,0 +1,60 @@
+上传序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant UploadPage as 上传界面
+    participant Camera as 摄像头/图片上传
+    participant OCRService as 文字识别服务
+    participant ThemeService as 主题识别服务
+    participant API as 共享Backend API
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as MySQLParagraphRepository
+    participant DB as 云端MySQL
+    participant ParagraphDetailPage as 语段展示界面
+
+    User->>UploadPage: 选择拍照上传或图片上传
+    UploadPage->>Camera: captureOrSelectImage()
+    Camera-->>UploadPage: 返回图片
+    UploadPage->>OCRService: recognizeText(image)
+    OCRService-->>UploadPage: 返回识别出的文字
+    UploadPage-->>User: 将识别文字填入语段内容
+    User->>UploadPage: 填写内容、主题、标签
+    UploadPage->>ThemeService: detectTheme(content)
+    ThemeService-->>UploadPage: 返回推荐作文主题
+    UploadPage-->>User: 将推荐主题设为作文主题默认值
+    User->>UploadPage: 点击上传
+    UploadPage->>API: POST /api/paragraphs（携带会话）
+    API->>ParagraphService: createParagraph(userId, paragraphData)
+    ParagraphService->>ParagraphRepository: create(paragraph)
+    ParagraphRepository->>DB: 事务写入paragraphs和paragraph_tags
+    DB-->>ParagraphRepository: 返回保存后的语段信息
+    ParagraphRepository-->>ParagraphService: 返回保存后的语段信息
+    ParagraphService-->>API: 返回上传结果和语段ID
+    API-->>UploadPage: 返回上传结果和语段ID
+    UploadPage->>ParagraphDetailPage: goToParagraphDetail(paragraphId)
+    ParagraphDetailPage->>API: GET /api/paragraphs/{id}
+    API->>ParagraphService: getParagraphById(paragraphId)
+    ParagraphService->>ParagraphRepository: findByIdWithCollectionCount(paragraphId)
+    ParagraphRepository->>DB: 查询共享语段详情
+    DB-->>ParagraphRepository: 返回语段详情和收藏数
+    ParagraphRepository-->>ParagraphService: 返回语段详情
+    ParagraphService-->>API: 返回语段详情
+    API-->>ParagraphDetailPage: 返回语段详情
+    ParagraphDetailPage-->>User: 展示上传成功后的语段详情和收藏数
+```
+
+上传规则表
+
+U1	用户未登录	跳转到登录界面
+U2	内容为空	提示“请输入语段内容”
+U3	未选择主题	提示“请选择作文主题”
+U4	内容过短	提示“语段内容过短”
+U5	表单合法	保存语段
+U6	保存成功	显示“上传成功”并进入对应语段展示界面
+U7	用户选择拍照或图片上传	调用文字识别服务并将识别结果填入内容输入框
+U8	文字识别失败	提示“文字识别失败，请手动输入或重新上传”
+U9	语段内容填写完毕	自动判断语段主题并设为作文主题默认值
+U10	主题识别失败	保留作文主题为空或原选择值，允许用户手动选择
+U11	用户选择标签	可选标签仅包括“开头”“结尾”“过渡”“应用文”“读后续写”“议论”“名言”“动作”“心理活动”“高级表达”
+U12	上传成功	语段写入云端共享数据库，其他设备刷新后可见

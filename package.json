@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "mysql2": "^3.11.5"
+  },
+  "scripts": {
+    "start": "node backend/server.js",
+    "railway:start": "node backend/server.js",
+    "db:migrate": "node backend/scripts/migrate.js",
+    "db:seed": "node backend/scripts/seed.js",
+    "db:copy-to-mysql": "node backend/scripts/copySqliteToMysql.js"
+  }
+}
