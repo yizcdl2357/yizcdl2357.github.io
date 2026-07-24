@@ -27,6 +27,7 @@
 }
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
 }
 
@@ -216,6 +217,7 @@ main {
 .hero {
   position: relative;
   display: grid;
+  overflow-x: clip;
   grid-template-columns: minmax(0, 1.35fr) minmax(310px, 0.65fr);
   gap: 42px;
   align-items: center;
