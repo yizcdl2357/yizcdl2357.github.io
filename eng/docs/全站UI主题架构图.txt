@@ -1,0 +1,266 @@
+# 全站 UI 主题架构图
+
+## 改造目标
+
+- 首页、语料库、上传语段、用户主页、登录、注册、语段详情和收藏页面统一采用 `UI示例.jpg` 的深色网格、青绿色霓虹视觉。
+- 保留现有页面文字、导航关系、表单字段、业务功能和数据交互，不修改业务语义。
+- 视觉能力集中在共享主题层和组件层，避免各页面分别复制样式。
+- 桌面端与移动端复用同一套设计令牌，通过响应式布局适配不同宽度。
+
+## UI 分层与业务模块关系
+
+```mermaid
+flowchart TB
+    Reference["视觉参考<br/>docs/UI示例.jpg"]
+
+    subgraph ThemeLayer["全站主题层"]
+        Tokens["Design Tokens<br/>近黑背景 / 青色网格 / 青绿高亮<br/>文字层级 / 圆角 / 边框 / 阴影 / 间距"]
+        Effects["Global Effects<br/>网格背景 / 径向霓虹光晕 / 聚焦态 / 过渡动画"]
+        Responsive["Responsive Rules<br/>桌面双栏 / 平板收缩 / 移动端单栏"]
+    end
+
+    subgraph SharedUI["共享界面组件层"]
+        Shell["App Shell<br/>顶栏 / 品牌 / 主导航 / 登录状态"]
+        Buttons["Buttons & Links<br/>主按钮 / 次按钮 / 危险操作"]
+        Forms["Form Controls<br/>搜索框 / 输入框 / 文本域 / 下拉框 / 标签选择"]
+        Cards["Cards & Lists<br/>语段卡片 / 主题卡片 / 信息面板 / 空状态"]
+        Feedback["Feedback<br/>校验提示 / 成功提示 / 错误提示 / 加载态"]
+    end
+
+    subgraph Pages["页面展示层（全部统一主题）"]
+        Home["首页"]
+        Corpus["语料库"]
+        Upload["上传语段"]
+        Profile["用户主页"]
+        Login["登录"]
+        Register["注册"]
+        Detail["语段详情"]
+        Collections["收藏语段"]
+    end
+
+    subgraph ExistingLogic["现有业务层（保持功能不变）"]
+        Auth["AuthService<br/>注册 / 登录 / 登出 / 当前用户"]
+        Paragraph["ParagraphService<br/>上传 / 浏览 / 详情 / 删除"]
+        Search["SearchService<br/>关键词 / 主题 / 标签检索"]
+        Collection["CollectionService<br/>收藏 / 取消收藏 / 收藏列表"]
+        Tools["OCR & ThemeService<br/>图片识别 / 主题检测"]
+        API["ApiClient / Storage<br/>后端 API 或现有数据源"]
+    end
+
+    Reference --> Tokens
+    Tokens --> Effects
+    Tokens --> Responsive
+    Tokens --> SharedUI
+    Effects --> Shell
+    Responsive --> Shell
+
+    Shell --> Pages
+    Buttons --> Pages
+    Forms --> Pages
+    Cards --> Pages
+    Feedback --> Pages
+
+    Home --> Paragraph
+    Corpus --> Search
+    Corpus --> Paragraph
+    Upload --> Paragraph
+    Upload --> Tools
+    Profile --> Auth
+    Profile --> Paragraph
+    Login --> Auth
+    Register --> Auth
+    Detail --> Paragraph
+    Detail --> Collection
+    Collections --> Collection
+
+    Auth --> API
+    Paragraph --> API
+    Search --> API
+    Collection --> API
+    Tools --> API
+```
+
+## 共享主题组件类图
+
+```mermaid
+classDiagram
+    class ThemeTokens {
+        +color background
+        +color surface
+        +color surfaceElevated
+        +color cyanPrimary
+        +color mintAccent
+        +color textPrimary
+        +color textSecondary
+        +color borderGlow
+        +length radius
+        +length spacing
+        +shadow neonGlow
+    }
+
+    class GlobalBackdrop {
+        +renderGrid()
+        +renderCyanGlow()
+        +renderMintGlow()
+        +respectReducedMotion()
+    }
+
+    class AppShell {
+        +renderBrand()
+        +renderNavigation()
+        +renderAuthState()
+        +renderPageContent()
+    }
+
+    class NeonButton {
+        +variant primary
+        +variant secondary
+        +variant danger
+        +showHoverState()
+        +showFocusState()
+        +showDisabledState()
+    }
+
+    class NeonField {
+        +renderLabel()
+        +renderInput()
+        +renderValidation()
+        +showFocusState()
+    }
+
+    class NeonCard {
+        +renderHeader()
+        +renderBody()
+        +renderMetadata()
+        +renderActions()
+    }
+
+    class PageView {
+        <<interface>>
+        +preserveExistingText()
+        +preserveExistingActions()
+        +renderResponsiveLayout()
+    }
+
+    class HomePage
+    class CorpusPage
+    class UploadPage
+    class UserProfilePage
+    class LoginPage
+    class RegisterPage
+    class ParagraphDetailPage
+    class CollectionPage
+
+    ThemeTokens --> GlobalBackdrop
+    ThemeTokens --> AppShell
+    ThemeTokens --> NeonButton
+    ThemeTokens --> NeonField
+    ThemeTokens --> NeonCard
+    GlobalBackdrop --> AppShell
+    AppShell o-- NeonButton
+    AppShell o-- NeonField
+    AppShell o-- NeonCard
+    PageView <|.. HomePage
+    PageView <|.. CorpusPage
+    PageView <|.. UploadPage
+    PageView <|.. UserProfilePage
+    PageView <|.. LoginPage
+    PageView <|.. RegisterPage
+    PageView <|.. ParagraphDetailPage
+    PageView <|.. CollectionPage
+    AppShell --> PageView : wraps all pages
+```
+
+## 页面应用矩阵
+
+| 页面 | 共享外壳 | 主要复用组件 | 保留的现有行为 |
+| --- | --- | --- | --- |
+| 首页 | 品牌、导航、登录状态、网格背景 | 搜索框、主题标签、最新语段卡片、主按钮 | 搜索入口、主题入口、最近语段跳转 |
+| 语料库 | 品牌、导航、网格背景 | 搜索与筛选控件、标签、语段卡片 | 关键词/主题/标签搜索、查看详情 |
+| 上传语段 | 品牌、导航、网格背景 | 表单面板、文本域、标签选择、按钮、反馈 | OCR、主题检测、上传和成功跳转 |
+| 用户主页 | 品牌、导航、登录状态 | 用户信息卡、语段列表、危险按钮 | 查看上传、删除语段、进入收藏 |
+| 登录/注册 | 品牌、导航、网格背景 | 居中认证卡、输入框、主按钮、反馈 | 登录、注册及页面互跳 |
+| 语段详情 | 品牌、导航、网格背景 | 正文卡、元数据标签、收藏按钮 | 查看全文、收藏数、收藏/取消收藏 |
+| 收藏语段 | 品牌、导航、网格背景 | 语段卡片、空状态、返回按钮 | 查看收藏、进入详情、返回主页 |
+
+## 实现约束
+
+1. 使用 CSS 自定义属性集中定义颜色、间距、圆角、阴影与层级，页面不得散落重复主题常量。
+2. 网格和光晕作为装饰背景，不拦截点击，不降低正文可读性；内容层必须保持足够对比度。
+3. 所有交互控件保留可见的键盘焦点状态；动画在 `prefers-reduced-motion` 下关闭或缩短。
+4. 小屏幕下导航允许换行或折叠，双栏内容改为单栏，表单和按钮保持可操作宽度。
+5. UI 改造只调整 HTML 展示结构、CSS 和必要的渲染类名，不改变服务方法、API 契约和存储格式。
+6. 所有原有文字和功能必须在改造后可访问；若为了布局移动元素，不得删除对应操作入口。
+
+## 程序员实施规范
+
+### 1. 设计令牌
+
+| 用途 | CSS 变量建议 | 值 | 使用原则 |
+| --- | --- | --- | --- |
+| 页面底色 | `--bg` | `#020B14` | 全站唯一大面积背景 |
+| 卡片底色 | `--surface` | `#071B2A` | 保持轻微透明感，不使用纯黑 |
+| 悬浮层 | `--surface-elevated` | `#0A2434` | 顶栏、弹性信息面板和输入聚焦底色 |
+| 主高亮 | `--primary` | `#00D9F5` | 主按钮、焦点环、关键边框 |
+| 主高亮悬停 | `--primary-strong` | `#5AEAFF` | 主按钮悬停和高亮文字 |
+| 辅助高亮 | `--accent` | `#67F5C2` | 标签、次级状态，不与主操作争夺层级 |
+| 主文字 | `--ink` | `#EAFBFF` | 标题、正文和按钮标签 |
+| 次文字 | `--muted` | `#9FB9C8` | 日期、说明、元数据，对比度不得过低 |
+| 默认边框 | `--line` | `rgba(0,217,245,.34)` | 1px 结构线，不得大面积强发光 |
+| 网格线 | `--grid-line` | `rgba(0,217,245,.30)` | 42px 正方形网格，必须位于内容下方 |
+| 危险色 | `--danger` | `#FF6B7A` | 删除和错误提示 |
+| 成功色 | `--success` | `#67F5C2` | 成功提示，同时保留文字说明 |
+| 圆角 | `--radius` | `10px` | 卡片、输入框、按钮统一；胶囊标签例外 |
+| 阴影 | `--shadow` | `0 18px 48px rgba(0,0,0,.34)` | 只用于高层级面板 |
+| 霓虹光 | `--glow` | `0 0 24px rgba(0,217,245,.18)` | 聚焦或悬停时使用，禁止每个容器同时发光 |
+
+- 字体栈：`Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif`；不依赖外部字体加载才能正常阅读。
+- 标题字重 800，正文 400，控件和小标题 700；英文辅助标题可使用少量字距。
+- 主标题用 `clamp(2.4rem, 6vw, 5rem)`；页内 `h1` 不小于 2rem；正文最小 16px；辅助文字最小 13px。
+- 间距以 4px 为基础单位，主要使用 8 / 12 / 16 / 24 / 32 / 48 / 64px，避免各页随意取值。
+
+### 2. 全站背景与外壳
+
+- `body` 使用两层线性渐变绘制 42px 网格，叠加右上青色、右下薄荷色的柔和径向光晕；底色始终为 `--bg`。
+- 背景装饰必须 `pointer-events: none`，内容层的层级高于网格与光晕。移动端降低光晕强度，防止影响正文。
+- `.site-header` 使用半透明深色背景、模糊和底部细线；顶栏粘附后不得遮挡页面标题或键盘聚焦元素。
+- `.header-inner` 与 `main` 共用 1180–1280px 最大内容宽度，左右留白桌面 24px、移动端 16px。
+- 品牌区可加入参考图的青色方形“英”字标识，但必须保留完整站名文字；不得用图标替代导航文字。
+
+### 3. 共享组件
+
+- **卡片**：使用 `--surface` 、1px `--line`、`--radius`；悬停时仅上移 2px 并增强边框/光晕。语段正文必须保持最高可读性，不使用发光文字。
+- **主按钮**：青色实心、深色文字；次按钮为透明深色底+青色边框；危险按钮仅删除操作使用红色。`hover`、`active`、`disabled`、`focus-visible` 状态都必须明确。
+- **输入控件**：深色底、次级边框、主文字；占位符对比度低于正文但仍可读。聚焦态用 2px 青色外环，不得只靠背景色表示。
+- **标签**：使用薄荷色浅填充与深色文字，或深色底+薄荷色边框；勾选态同时改变边框、填充并保留原生 checkbox 可识别性。
+- **消息**：成功与失败都使用文字+颜色，不能只用颜色；保留现有 `.message` 和 `.message.success` 语义。
+- **空状态**：使用虚线边框的深色面板，原有空状态文字不得改写或删除。
+
+### 4. 各页面一致性
+
+| 页面 | 桌面布局 | 小屏布局 | 必须保留的元素 |
+| --- | --- | --- | --- |
+| 首页 | 左侧主文案与行动，右侧最新语段面板；下方主题网格 | 文案、行动、最新语段、主题卡顺序堆叠 | eyebrow、主标题、简介、“浏览语料库”、“上传语段”、最新语段、作文主题 |
+| 语料库 | 搜索面板在上，语段列表在下 | 搜索字段、标签、按钮纵向排列 | 关键词、主题、标签、结果数、语段元数据和详情入口 |
+| 上传语段 | 主表单大面板，OCR 为内部分区 | 所有控件单列，图片预览不超容器 | 内容、OCR、主题检测、标签、上传按钮和反馈 |
+| 登录/注册 | 420–440px 居中认证卡 | 卡片宽度 100%，无水平滚动 | 全部字段、消息、提交按钮和页面互跳入口 |
+| 用户主页 | 用户信息与操作横向分布，语段列表在下 | 用户信息、操作和列表堆叠 | 用户名、注册时间、我的收藏、继续上传、删除功能 |
+| 收藏语段 | 页头操作+列表 | 返回按钮与标题分行 | 收藏列表、空状态、详情入口和返回主页 |
+| 语段详情 | 单列阅读卡，正文宽度控制在适读范围 | 卡片内边距减小，元数据自动换行 | 返回、主题、日期、上传者、标签、全文、收藏/取消和收藏数 |
+
+### 5. 响应式与可访问性验收线
+
+- 建议断点：`820px` 以下变为单列，`520px` 以下缩减页面留白、按钮允许占满行宽；支持 320px 宽度。
+- 导航、登录态和按钮组可换行，不得裁切文字；主要触摸目标高度不小于 44px。
+- 正文与背景对比度至少 4.5:1，大文字和非文字控件至少 3:1；网格线不得穿透卡片降低对比。
+- 所有原生按钮、链接、输入框、checkbox 和使用 `role="button"` 的语段卡都必须具有清晰的 `:focus-visible`。
+- 不取消键盘 Enter/Space 打开语段的现有行为；不更改表单 label 与字段的关联。
+- 过渡时长为 120–200ms，只动画颜色、边框、阴影和小幅位移；`prefers-reduced-motion: reduce` 时关闭平滑滚动与非必要动画。
+- 不使用霓虹光芒作为唯一状态提示，不在正文上使用 `text-shadow`，不用持续循环动画。
+
+### 6. 改造边界
+
+- 主要改动应集中在 `css/style.css`；仅当共享外壳或装饰元素必需时才对 `index.html` 做最小结构改动。
+- `js/ui.js` 中动态生成的 `.theme-card`、`.paragraph-card`、`.compact-item`、`.tag`、`.detail-card`、`.count-pill` 必须直接复用全局主题，不另建页面私有配色。
+- 禁止更改服务方法、API 路径、存储键、数据库结构、表单 ID、`data-page` 和业务事件绑定。
+- 参考图是视觉方向，不是新功能需求；不应为了像参考图而新增无对应业务的搜索框、圆环指标或虚构数据。
