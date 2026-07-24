@@ -1,0 +1,79 @@
+注册序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant LoginPage as 登录界面
+    participant RegisterPage as 注册界面
+    participant API as 共享Backend API
+    participant AuthService as AuthService
+    participant UserRepository as MySQLUserRepository
+    participant DB as 云端MySQL
+
+    User->>LoginPage: 点击注册入口
+    LoginPage->>RegisterPage: goToRegister()
+    RegisterPage-->>User: 显示注册界面
+
+    User->>RegisterPage: 输入用户名和密码
+    User->>RegisterPage: 点击注册
+    RegisterPage->>API: POST /api/auth/register
+    API->>AuthService: register(username, password)
+    AuthService->>UserRepository: findByUsername(username)
+    UserRepository->>DB: 查询共享用户数据
+    DB-->>UserRepository: 返回查询结果
+    AuthService->>UserRepository: createUser(username, passwordHash)
+    UserRepository->>DB: 写入新用户
+    DB-->>UserRepository: 返回新用户信息
+    AuthService-->>API: 返回注册结果
+    API-->>RegisterPage: 返回注册结果
+    RegisterPage->>LoginPage: goToLogin()
+    LoginPage-->>User: 显示登录界面
+```
+
+注册规则表
+
+规则编号	条件	系统行为
+R1	用户名为空	提示“请输入用户名”
+R2	密码为空	提示“请输入密码”
+R3	用户名已存在	提示“用户名已被使用”
+R4	用户名可用且密码合法	创建用户账号
+
+登录序列图
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant LoginPage as 登录界面
+    participant API as 共享Backend API
+    participant AuthService as AuthService
+    participant UserRepository as MySQLUserRepository
+    participant SessionStore as 服务端会话存储
+    participant DB as 云端MySQL
+    participant HomePage as 网站主页
+
+    User->>LoginPage: 输入用户名和密码
+    User->>LoginPage: 点击登录
+    LoginPage->>API: POST /api/auth/login
+    API->>AuthService: login(username, password)
+    AuthService->>UserRepository: findByUsername(username)
+    UserRepository->>DB: 查询共享用户数据
+    DB-->>UserRepository: 返回用户信息
+    AuthService->>AuthService: verifyPassword(password, passwordHash)
+    AuthService->>SessionStore: createSession(userId)
+    SessionStore-->>AuthService: 返回sessionId
+    AuthService-->>API: 返回登录结果
+    API-->>LoginPage: Set-Cookie安全会话凭据
+    LoginPage->>HomePage: 登录成功后跳转
+    HomePage-->>User: 显示网站主页
+```
+
+登录规则表
+
+规则编号	条件	系统行为
+L1	用户名为空	提示“请输入用户名”
+L2	密码为空	提示“请输入密码”
+L3	用户名不存在	提示“用户名或密码错误”
+L4	密码错误	提示“用户名或密码错误”
+L5	用户名存在且密码正确	保存登录状态
+L6	用户更换设备	在新设备重新登录后访问同一云端账号数据
+L7	保存登录状态	由服务端会话管理，浏览器仅保存安全会话凭据

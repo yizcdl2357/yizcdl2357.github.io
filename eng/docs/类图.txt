@@ -1,0 +1,334 @@
+# 领域模型类图
+
+```mermaid
+classDiagram
+    class User {
+        +string id
+        +string username
+        +string passwordHash
+        +Date createdAt
+    }
+
+    class Paragraph {
+        +string id
+        +string content
+        +string authorId
+        +string theme
+        +Tag[] tags
+        +int collectionCount
+        +Date createdAt
+        +Date updatedAt
+        +validateContent()
+    }
+
+    class Collection {
+        +string id
+        +string userId
+        +string paragraphId
+        +Date createdAt
+    }
+
+    class Theme {
+        +string id
+        +string name
+        +string description
+    }
+
+    class Tag {
+        <<enumeration>>
+        开头
+        结尾
+        过渡
+        应用文
+        读后续写
+        议论
+        名言
+        动作
+        心理活动
+        高级表达
+    }
+
+    User "1" --> "*" Paragraph : uploads
+    User "1" --> "*" Collection : owns
+    Paragraph "1" --> "*" Collection : collected by
+    Paragraph "*" --> "1" Theme : belongs to
+    Paragraph "*" --> "*" Tag : has
+```
+
+# 前端页面导航类图
+
+```mermaid
+classDiagram
+    class ApiClient {
+        +get(path)
+        +post(path, body)
+        +delete(path)
+        +sendCredentials()
+    }
+
+    class HomePage {
+        +showFeaturedThemes()
+        +showRecentParagraphs()
+        +openRecentParagraph(paragraphId)
+        +goToCorpus()
+        +goToUpload()
+        +goToLogin()
+        +goToUserProfile()
+    }
+
+    class LoginPage {
+        +submitLogin()
+        +goToRegister()
+    }
+
+    class RegisterPage {
+        +submitRegister()
+        +goToLogin()
+    }
+
+    class UserProfilePage {
+        +showUserInfo()
+        +showMyParagraphs()
+        +confirmDeleteParagraph(paragraphId)
+        +deleteMyParagraph(paragraphId)
+        +goToMyCollections()
+    }
+
+    class UploadPage {
+        +string content
+        +string theme
+        +Tag[] tags
+        +recognizeImage()
+        +detectTheme()
+        +submitParagraph()
+        +goToParagraphDetail(paragraphId)
+    }
+
+    class CorpusPage {
+        +string keyword
+        +string selectedTheme
+        +Tag[] selectedTags
+        +showParagraphList()
+        +showCollectionCounts()
+        +formatParagraphPreview(300)
+        +openParagraph(paragraphId)
+    }
+
+    class ParagraphDetailPage {
+        +string paragraphId
+        +showParagraphDetail()
+        +showCollectionCount()
+        +showCollectionState()
+        +toggleCollection()
+    }
+
+    class CollectionPage {
+        +showCollectedParagraphs()
+        +openParagraph(paragraphId)
+        +goBackToProfile()
+    }
+
+    HomePage --> CorpusPage : navigates
+    HomePage --> UploadPage : navigates
+    HomePage --> LoginPage : navigates
+    HomePage --> UserProfilePage : username navigates
+    HomePage --> ParagraphDetailPage : recent paragraph navigates
+    LoginPage --> RegisterPage : navigates
+    RegisterPage --> LoginPage : navigates
+    UserProfilePage --> CollectionPage : navigates
+    UploadPage --> ParagraphDetailPage : upload success
+    CorpusPage --> ParagraphDetailPage : paragraph click
+    CollectionPage --> ParagraphDetailPage : paragraph click
+
+    HomePage --> ApiClient : uses
+    LoginPage --> ApiClient : uses
+    RegisterPage --> ApiClient : uses
+    UserProfilePage --> ApiClient : uses
+    UploadPage --> ApiClient : uses
+    CorpusPage --> ApiClient : uses
+    ParagraphDetailPage --> ApiClient : uses
+    CollectionPage --> ApiClient : uses
+```
+
+# 后端共享数据访问类图
+
+```mermaid
+classDiagram
+    class ApiServer {
+        +start()
+        +registerRoutes()
+    }
+
+    class AuthService {
+        +register(username, password)
+        +login(username, password)
+        +logout(sessionId)
+        +getCurrentUser(sessionId)
+    }
+
+    class ParagraphService {
+        +createParagraph(userId, content, theme, tags)
+        +getParagraphById(id)
+        +searchParagraphs(keyword, theme, tags)
+        +getParagraphsByUser(userId)
+        +deleteParagraph(userId, paragraphId)
+    }
+
+    class CollectionService {
+        +collectParagraph(userId, paragraphId)
+        +uncollectParagraph(userId, paragraphId)
+        +getCollectionsByUser(userId)
+        +getCollectionCount(paragraphId)
+    }
+
+    class UserRepository {
+        <<interface>>
+        +create(user)
+        +findById(id)
+        +findByUsername(username)
+    }
+
+    class ParagraphRepository {
+        <<interface>>
+        +create(paragraph)
+        +findById(id)
+        +findByUserId(userId)
+        +search(keyword, theme, tags)
+        +deleteById(id)
+    }
+
+    class CollectionRepository {
+        <<interface>>
+        +create(collection)
+        +delete(userId, paragraphId)
+        +findByUserId(userId)
+        +countByParagraphId(paragraphId)
+    }
+
+    class SQLiteRepository {
+        <<development only>>
+        +connect(localFilePath)
+    }
+
+    class MySQLRepository {
+        <<shared environment>>
+        +connect(host, port, database, credentials, ssl)
+    }
+
+    class LocalSQLiteFile {
+        <<local file>>
+        data/english-corpus.sqlite
+        single-device development
+    }
+
+    class CloudMySQLDatabase {
+        <<cloud database>>
+        shared test and production data
+        private network or IP allowlist
+        TLS connection
+        automated backup
+    }
+
+    ApiServer --> AuthService
+    ApiServer --> ParagraphService
+    ApiServer --> CollectionService
+    AuthService --> UserRepository
+    ParagraphService --> ParagraphRepository
+    ParagraphService --> CollectionRepository
+    CollectionService --> ParagraphRepository
+    CollectionService --> CollectionRepository
+
+    UserRepository <|.. SQLiteRepository
+    ParagraphRepository <|.. SQLiteRepository
+    CollectionRepository <|.. SQLiteRepository
+    UserRepository <|.. MySQLRepository
+    ParagraphRepository <|.. MySQLRepository
+    CollectionRepository <|.. MySQLRepository
+
+    SQLiteRepository --> LocalSQLiteFile : local process access
+    MySQLRepository --> CloudMySQLDatabase : pooled TLS connection
+```
+
+约束：浏览器或其他客户端不得直接连接 SQLite 或 MySQL；所有设备必须通过同一个后端 API 访问共享数据。SQLite 只用于单机开发，跨设备联调、验收测试和生产环境使用云端 MySQL。
+
+# Railway 部署与例句迁移类图
+
+```mermaid
+classDiagram
+    class GitHubPagesFrontend {
+        +string origin
+        +string apiBaseUrl
+        +requestApi(path, credentials)
+    }
+
+    class RailwayApiServer {
+        +start()
+        +healthCheck()
+        +registerRoutes()
+    }
+
+    class CorsPolicy {
+        +string allowedOrigin
+        +bool allowCredentials
+        +validateOrigin(origin)
+        +handlePreflight(request)
+    }
+
+    class RailwayConfig {
+        +string dbHost
+        +int dbPort
+        +string dbName
+        +string dbUser
+        +Secret dbPassword
+        +Secret sessionSecret
+        +string systemUserId
+        +validate()
+    }
+
+    class CorpusMigrationService {
+        +migrateExamples(source)
+        +validateScope()
+        +deduplicate()
+        +verifyResult()
+    }
+
+    class SystemUserResolver {
+        +ensureSystemUser(systemUserId)
+        +disableInteractiveLogin()
+    }
+
+    class MigrationSource {
+        <<read only>>
+        +listContentThemeTags()
+    }
+
+    class MySQLParagraphRepository {
+        +upsertSystemParagraph(data, systemUserId)
+    }
+
+    class MySQLTagRepository {
+        +upsertByNames(tagNames)
+    }
+
+    class CloudMySQL {
+        <<external service>>
+        host mysql6.sqlpub.com
+        port 3311
+        database yizcdl2357eng
+    }
+
+    GitHubPagesFrontend --> RailwayApiServer : HTTPS JSON
+    RailwayApiServer --> CorsPolicy : enforces
+    RailwayApiServer --> RailwayConfig : reads variables/secrets
+    RailwayApiServer --> MySQLParagraphRepository
+    RailwayApiServer --> MySQLTagRepository
+    CorpusMigrationService --> MigrationSource : reads examples only
+    CorpusMigrationService --> SystemUserResolver
+    CorpusMigrationService --> MySQLParagraphRepository
+    CorpusMigrationService --> MySQLTagRepository
+    SystemUserResolver --> CloudMySQL
+    MySQLParagraphRepository --> CloudMySQL
+    MySQLTagRepository --> CloudMySQL
+```
+
+迁移边界：`CorpusMigrationService` 只读取正文、主题和标签；不依赖、不复制本地 `User` 与 `Collection`。所有迁移语段的 `authorId` 由 `SystemUserResolver` 统一提供。

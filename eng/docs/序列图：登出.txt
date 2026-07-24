@@ -1,0 +1,26 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant HomePage as 网站主页
+    participant API as 共享Backend API
+    participant AuthService as AuthService
+    participant SessionStore as 服务端会话存储
+    participant LoginPage as 登录界面
+
+    User->>HomePage: 点击登出
+    HomePage->>API: POST /api/auth/logout（携带会话）
+    API->>AuthService: logout(sessionId)
+    AuthService->>SessionStore: revokeSession(sessionId)
+    SessionStore-->>AuthService: 会话已失效
+    AuthService-->>API: 返回登出成功
+    API-->>HomePage: 清除浏览器会话凭据
+    HomePage->>LoginPage: 跳转到登录界面
+    LoginPage-->>User: 显示登录界面
+```
+
+登出规则表
+规则编号	条件	系统行为
+O1	用户点击登出	清除当前登录状态
+O2	登出成功	跳转到登录界面或网站主页
+O3	用户未登录时访问登出	保持未登录状态并跳转到登录界面
+O4	用户在某一设备登出	撤销该设备的服务端会话，不删除云端用户数据

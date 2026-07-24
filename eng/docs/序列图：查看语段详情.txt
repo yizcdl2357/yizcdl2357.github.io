@@ -1,0 +1,55 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant CorpusPage as 语料库界面
+    participant ParagraphDetailPage as 语段展示界面
+    participant API as 共享Backend API
+    participant ParagraphService as ParagraphService
+    participant AuthService as AuthService
+    participant CollectionService as CollectionService
+    participant ParagraphRepository as MySQLParagraphRepository
+    participant CollectionRepository as MySQLCollectionRepository
+    participant DB as 云端MySQL
+
+    User->>CorpusPage: 点击某个语段
+    CorpusPage->>ParagraphDetailPage: openParagraph(paragraphId)
+    ParagraphDetailPage->>API: GET /api/paragraphs/{id}（可携带会话）
+    API->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>API: 返回当前用户或未登录状态
+    API->>ParagraphService: getParagraphById(paragraphId)
+    ParagraphService->>ParagraphRepository: findById(paragraphId)
+    ParagraphRepository->>DB: 查询共享语段详情
+    DB-->>ParagraphRepository: 返回语段详情
+    ParagraphRepository-->>ParagraphService: 返回语段详情
+    API->>CollectionService: getCollectionState(userId, paragraphId)
+    CollectionService->>CollectionRepository: countAndExists(userId, paragraphId)
+    CollectionRepository->>DB: 查询收藏数和当前用户收藏状态
+    DB-->>CollectionRepository: 返回收藏统计和状态
+    CollectionRepository-->>CollectionService: 返回收藏统计和状态
+    ParagraphService-->>API: 返回语段详情
+    CollectionService-->>API: 返回收藏统计和状态
+    API-->>ParagraphDetailPage: 返回完整展示数据
+    ParagraphDetailPage-->>User: 展示语段详情、收藏数和收藏状态
+
+    User->>ParagraphDetailPage: 点击收藏或取消收藏
+    ParagraphDetailPage->>API: POST或DELETE /api/paragraphs/{id}/collections
+    API->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>API: 返回当前用户
+    API->>CollectionService: collect或uncollect(userId, paragraphId)
+    CollectionService->>CollectionRepository: create或delete(userId, paragraphId)
+    CollectionRepository->>DB: 事务更新共享收藏数据
+    DB-->>CollectionRepository: 返回新的收藏状态和收藏数
+    CollectionRepository-->>CollectionService: 返回新的收藏状态和收藏数
+    CollectionService-->>API: 返回新的收藏状态和收藏数
+    API-->>ParagraphDetailPage: 返回新的收藏状态和收藏数
+    ParagraphDetailPage-->>User: 更新收藏状态和收藏数
+```
+
+语段详情规则表
+规则编号	条件	系统行为
+D1	语段存在	展示内容、主题、标签和收藏数
+D2	语段不存在	显示语段不存在提示
+D3	用户未登录时点击收藏	跳转到登录界面
+D4	用户未收藏该语段时点击收藏	创建收藏记录并增加收藏数
+D5	用户已收藏该语段时点击取消收藏	删除收藏记录并减少收藏数
+D6	任意设备修改收藏状态	写入云端共享数据库，其他设备刷新后获得最新状态和收藏数

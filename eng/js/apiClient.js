@@ -1,5 +1,6 @@
 const ApiClient = (() => {
-  const baseUrl = window.API_BASE_URL || "";
+  const configuredBaseUrl = window.API_BASE_URL || window.APP_CONFIG?.API_BASE_URL || "";
+  const baseUrl = configuredBaseUrl.replace(/\/$/, "");
   const offlineMessage = "后端服务暂时不可用，已切换到本地演示数据";
 
   async function request(path, options = {}) {
@@ -14,12 +15,12 @@ const ApiClient = (() => {
         ...options
       });
     } catch {
-      return offline();
+      return unavailable();
     }
 
-    const data = await response.json().catch(() => offline());
-    if (data.offline || (response.status === 404 && path.startsWith("/api/"))) {
-      return offline();
+    const data = await response.json().catch(() => ({ ok: false, message: "服务响应格式错误" }));
+    if (response.status === 404 && path.startsWith("/api/") && !baseUrl) {
+      return unavailable();
     }
 
     if (!response.ok && data.ok !== false) {
@@ -28,8 +29,13 @@ const ApiClient = (() => {
     return data;
   }
 
-  function offline() {
-    return { ok: false, offline: true, message: offlineMessage };
+  function unavailable() {
+    return {
+      ok: false,
+      offline: true,
+      allowLocalFallback: !baseUrl,
+      message: baseUrl ? "云端服务暂时不可用，请稍后重试" : offlineMessage
+    };
   }
 
   function get(path) {

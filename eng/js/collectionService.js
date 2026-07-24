@@ -4,7 +4,7 @@ const CollectionService = (() => {
 
   async function refreshMyCollections() {
     const result = await ApiClient.get("/api/me/collections");
-    if (result.offline) return getCollectionsByUserLocal(AuthService.getCurrentUser()?.id);
+    if (result.allowLocalFallback) return getCollectionsByUserLocal(AuthService.getCurrentUser()?.id);
 
     collectedParagraphIds.clear();
     if (result.ok) {
@@ -18,7 +18,7 @@ const CollectionService = (() => {
 
   async function getCollectionCount(paragraphId) {
     const result = await ApiClient.get(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
-    const count = result.offline
+    const count = result.allowLocalFallback
       ? getCollectionCountLocal(paragraphId)
       : result.ok ? result.collectionCount : 0;
     collectionCounts.set(paragraphId, count);
@@ -32,7 +32,7 @@ const CollectionService = (() => {
   async function collectParagraph(userId, paragraphId) {
     if (!userId) return { ok: false, message: "请先登录" };
     const result = await ApiClient.post(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
-    if (result.offline) return collectParagraphLocal(userId, paragraphId);
+    if (result.allowLocalFallback) return collectParagraphLocal(userId, paragraphId);
     if (result.ok) {
       collectedParagraphIds.add(paragraphId);
       collectionCounts.set(paragraphId, result.collectionCount || 0);
@@ -43,7 +43,7 @@ const CollectionService = (() => {
   async function uncollectParagraph(userId, paragraphId) {
     if (!userId) return { ok: false, message: "请先登录" };
     const result = await ApiClient.del(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
-    if (result.offline) return uncollectParagraphLocal(userId, paragraphId);
+    if (result.allowLocalFallback) return uncollectParagraphLocal(userId, paragraphId);
     if (result.ok) {
       collectedParagraphIds.delete(paragraphId);
       collectionCounts.set(paragraphId, result.collectionCount || 0);

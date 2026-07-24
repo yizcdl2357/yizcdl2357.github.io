@@ -1,30 +1,30 @@
 const ParagraphService = (() => {
   async function createParagraph(data) {
     const result = await ApiClient.post("/api/paragraphs", data);
-    return result.offline ? createParagraphLocal(data) : result;
+    return result.allowLocalFallback ? createParagraphLocal(data) : result;
   }
 
   async function getParagraphById(id) {
     const result = await ApiClient.get(`/api/paragraphs/${encodeURIComponent(id)}`);
-    if (result.offline) return getParagraphByIdLocal(id);
+    if (result.allowLocalFallback) return getParagraphByIdLocal(id);
     return result.ok ? result.paragraph : null;
   }
 
   async function getParagraphsByTheme(theme) {
     const result = await ApiClient.get(`/api/paragraphs?theme=${encodeURIComponent(theme)}`);
-    if (result.offline) return getParagraphsByThemeLocal(theme);
+    if (result.allowLocalFallback) return getParagraphsByThemeLocal(theme);
     return result.ok ? result.paragraphs : [];
   }
 
   async function getParagraphsByUser() {
     const result = await ApiClient.get("/api/me/paragraphs");
-    if (result.offline) return getParagraphsByUserLocal(AuthService.getCurrentUser()?.id);
+    if (result.allowLocalFallback) return getParagraphsByUserLocal(AuthService.getCurrentUser()?.id);
     return result.ok ? result.paragraphs : [];
   }
 
   async function getRecentParagraphs(limit) {
     const result = await ApiClient.get("/api/paragraphs");
-    const paragraphs = result.offline
+    const paragraphs = result.allowLocalFallback
       ? getRecentParagraphsLocal()
       : result.ok ? result.paragraphs : [];
     return limit ? paragraphs.slice(0, limit) : paragraphs;
@@ -32,7 +32,7 @@ const ParagraphService = (() => {
 
   async function deleteParagraph(id) {
     const result = await ApiClient.del(`/api/paragraphs/${encodeURIComponent(id)}`);
-    return result.offline ? deleteParagraphLocal(id) : result;
+    return result.allowLocalFallback ? deleteParagraphLocal(id) : result;
   }
 
   function normalizeTheme(theme) {

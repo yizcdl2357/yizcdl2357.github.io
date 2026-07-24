@@ -1,0 +1,70 @@
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant HomePage as 网站主页
+    participant UserProfilePage as 用户主页
+    participant API as 共享Backend API
+    participant AuthService as AuthService
+    participant ParagraphService as ParagraphService
+    participant ParagraphRepository as MySQLParagraphRepository
+    participant DB as 云端MySQL
+    participant CollectionPage as 我的收藏界面
+
+    User->>HomePage: 点击上边栏用户名
+    HomePage->>UserProfilePage: goToUserProfile()
+    UserProfilePage->>API: GET /api/auth/me（携带会话）
+    API->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>API: 返回当前用户
+    API-->>UserProfilePage: 返回当前用户
+    UserProfilePage->>API: GET /api/me/paragraphs
+    API->>ParagraphService: getParagraphsByUser(userId)
+    ParagraphService->>ParagraphRepository: findByAuthorId(userId)
+    ParagraphRepository->>DB: 查询共享用户语段
+    DB-->>ParagraphRepository: 返回用户上传的语段
+    ParagraphRepository-->>ParagraphService: 返回用户上传的语段
+    ParagraphService-->>API: 返回语段列表
+    API-->>UserProfilePage: 返回语段列表
+    UserProfilePage-->>User: 展示用户信息和我的上传
+
+    User->>UserProfilePage: 点击某条已发布语段的删除按钮
+    UserProfilePage-->>User: 提示“确定删除该语段？”
+    User->>UserProfilePage: 确认删除
+    UserProfilePage->>API: DELETE /api/paragraphs/{id}
+    API->>AuthService: getCurrentUser(sessionId)
+    AuthService-->>API: 返回当前用户
+    API->>ParagraphService: deleteParagraph(userId, paragraphId)
+    ParagraphService->>ParagraphRepository: deleteOwnedParagraph(userId, paragraphId)
+    ParagraphRepository->>DB: 事务校验所有权并级联删除关联数据
+    DB-->>ParagraphRepository: 返回删除结果
+    ParagraphRepository-->>ParagraphService: 返回删除结果
+    ParagraphService-->>API: 返回删除结果
+    API-->>UserProfilePage: 返回删除结果
+    UserProfilePage->>API: GET /api/me/paragraphs
+    API->>ParagraphService: getParagraphsByUser(userId)
+    ParagraphService->>ParagraphRepository: findByAuthorId(userId)
+    ParagraphRepository->>DB: 查询更新后的共享数据
+    DB-->>ParagraphRepository: 返回更新后的语段列表
+    ParagraphRepository-->>ParagraphService: 返回更新后的语段列表
+    ParagraphService-->>API: 返回更新后的语段列表
+    API-->>UserProfilePage: 返回更新后的语段列表
+    UserProfilePage-->>User: 刷新我的上传列表
+
+    User->>UserProfilePage: 点击我的收藏
+    UserProfilePage->>CollectionPage: goToMyCollections()
+    CollectionPage-->>User: 显示我的收藏界面
+```
+
+用户主页规则表
+规则编号	条件	系统行为
+P1	用户未登录	跳转到登录界面
+P2	用户已登录	展示用户名和注册时间
+P3	用户上传过语段	展示该用户上传的语段列表
+P4	用户未上传语段	显示“你还没有上传语段”
+P5	用户点击我的收藏	进入我的收藏界面
+P6	用户点击上边栏用户名	进入用户主页
+P7	上边栏不显示“我的主页”按钮	通过用户名作为用户主页入口
+P8	用户点击已发布语段的删除按钮	提示“确定删除该语段？”
+P9	用户确认删除	删除该语段并刷新我的上传列表
+P10	用户取消删除	关闭确认提示并保留该语段
+P11	用户从其他设备登录	通过同一账号查看云端保存的我的上传
+P12	用户确认删除	后端校验语段所有权，并以事务删除语段、标签关联和收藏记录
