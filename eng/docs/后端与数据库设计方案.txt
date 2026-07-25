@@ -656,3 +656,12 @@ sequenceDiagram
 3. 迁移后校验所有新例句的 `author_id = SYSTEM_USER_ID`，并确认未新增本地用户、未写入收藏记录。
 4. 数量、失败 ID 和校验摘要可记录；数据库密码、Cookie、Session Secret 和完整连接串不得出现在日志中。
 5. 迁移完成后通过 Railway API 查询语料库，从 GitHub Pages 执行 CORS 真实请求，确认正文、主题和标签可见且收藏初始为 0。
+
+## DDD 重构与数据库的关系
+
+- 数据库表是 Infrastructure 适配器的持久化契约，不是 Domain 模型本身；聚合和值对象不使用 SQL 列名作为公共属性名。
+- `users + sessions` 映射 Identity/Auth 上下文；`paragraphs + paragraph_tags` 映射 Corpus 上下文；`collections` 映射 Collection 上下文；`tags` 映射 Theme/Tag 上下文。
+- 外键只保证持久化完整性，跨上下文业务交互通过 ID 值对象和 Application use case 完成，不让一个聚合直接持有另一聚合的可变对象。
+- 事务边界与现有行为一致：创建语段时同步保存标签关联；删除语段时删除关联收藏和标签关联；收藏的唯一约束保持在数据库与 Domain 双层。
+- MySQL/SQLite Repository adapter 必须通过同一契约测试，且返回 Domain 对象/应用 DTO，不将 driver row 泄漏给应用层。
+- DDD 重构不新增、删除或改名表/字段，不重新迁移已有云数据；完整重构契约见 `docs/DDD架构设计.txt`。
