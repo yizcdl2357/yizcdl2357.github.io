@@ -1,48 +1,26 @@
-const crypto = require("crypto");
-
 class CollectionService {
-  constructor(collectionRepository, paragraphRepository) {
-    this.collectionRepository = collectionRepository;
-    this.paragraphRepository = paragraphRepository;
+  constructor(collectionUseCases) {
+    this.collectionUseCases = collectionUseCases;
   }
 
   async collectParagraph(userId, paragraphId) {
-    if (!await this.paragraphRepository.findById(paragraphId)) {
-      return { ok: false, message: "语段不存在" };
-    }
-
-    await this.collectionRepository.create({
-      id: crypto.randomUUID(),
-      userId,
-      paragraphId,
-      createdAt: new Date().toISOString()
-    });
-    return { ok: true, collectionCount: await this.getCollectionCount(paragraphId), collected: true };
+    return this.collectionUseCases.collect({ userId, paragraphId });
   }
 
   async uncollectParagraph(userId, paragraphId) {
-    await this.collectionRepository.delete(userId, paragraphId);
-    return { ok: true, collectionCount: await this.getCollectionCount(paragraphId), collected: false };
+    return this.collectionUseCases.uncollect({ userId, paragraphId });
   }
 
   async getCollectionsByUser(userId) {
-    const collections = await this.collectionRepository.findByUserId(userId);
-    const paragraphs = await Promise.all(collections.map((collection) => {
-      return this.paragraphRepository.findById(collection.paragraphId);
-    }));
-
-    return Promise.all(paragraphs.filter(Boolean).map(async (paragraph) => ({
-      ...paragraph,
-      collectionCount: await this.getCollectionCount(paragraph.id)
-    })));
+    return this.collectionUseCases.listByUser({ userId });
   }
 
   async getCollectionCount(paragraphId) {
-    return this.collectionRepository.countByParagraphId(paragraphId);
+    return this.collectionUseCases.count({ paragraphId });
   }
 
   async isCollected(userId, paragraphId) {
-    return this.collectionRepository.exists(userId, paragraphId);
+    return this.collectionUseCases.isCollected({ userId, paragraphId });
   }
 }
 

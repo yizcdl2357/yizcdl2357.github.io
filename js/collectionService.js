@@ -3,7 +3,7 @@ const CollectionService = (() => {
   const collectionCounts = new Map();
 
   async function refreshMyCollections() {
-    const result = await ApiClient.get("/api/me/collections");
+    const result = await ClientFacades.collection.listMine();
     if (result.allowLocalFallback) return getCollectionsByUserLocal(AuthService.getCurrentUser()?.id);
 
     collectedParagraphIds.clear();
@@ -17,7 +17,7 @@ const CollectionService = (() => {
   }
 
   async function getCollectionCount(paragraphId) {
-    const result = await ApiClient.get(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
+    const result = await ClientFacades.collection.count(paragraphId);
     const count = result.allowLocalFallback
       ? getCollectionCountLocal(paragraphId)
       : result.ok ? result.collectionCount : 0;
@@ -31,7 +31,7 @@ const CollectionService = (() => {
 
   async function collectParagraph(userId, paragraphId) {
     if (!userId) return { ok: false, message: "请先登录" };
-    const result = await ApiClient.post(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
+    const result = await ClientFacades.collection.collect(paragraphId);
     if (result.allowLocalFallback) return collectParagraphLocal(userId, paragraphId);
     if (result.ok) {
       collectedParagraphIds.add(paragraphId);
@@ -42,7 +42,7 @@ const CollectionService = (() => {
 
   async function uncollectParagraph(userId, paragraphId) {
     if (!userId) return { ok: false, message: "请先登录" };
-    const result = await ApiClient.del(`/api/paragraphs/${encodeURIComponent(paragraphId)}/collections`);
+    const result = await ClientFacades.collection.uncollect(paragraphId);
     if (result.allowLocalFallback) return uncollectParagraphLocal(userId, paragraphId);
     if (result.ok) {
       collectedParagraphIds.delete(paragraphId);

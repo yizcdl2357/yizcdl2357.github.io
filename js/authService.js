@@ -2,25 +2,25 @@ const AuthService = (() => {
   let currentUser = null;
 
   async function initialize() {
-    const result = await ApiClient.get("/api/auth/me");
+    const result = await ClientFacades.identity.current();
     currentUser = result.allowLocalFallback ? getLocalCurrentUser() : result.user || null;
     return currentUser;
   }
 
   async function register(username, password) {
-    const result = await ApiClient.post("/api/auth/register", { username, password });
+    const result = await ClientFacades.identity.register(username, password);
     return result.allowLocalFallback ? registerLocal(username, password) : result;
   }
 
   async function login(username, password) {
-    const result = await ApiClient.post("/api/auth/login", { username, password });
+    const result = await ClientFacades.identity.login(username, password);
     if (result.allowLocalFallback) return loginLocal(username, password);
     if (result.ok) currentUser = result.user;
     return result;
   }
 
   async function logout() {
-    const result = await ApiClient.post("/api/auth/logout");
+    const result = await ClientFacades.identity.logout();
     if (result.allowLocalFallback) return logoutLocal();
     currentUser = null;
     return result;

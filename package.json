@@ -8,5 +8,8 @@
     "db:migrate": "node backend/scripts/migrate.js",
     "db:seed": "node backend/scripts/seed.js",
     "db:copy-to-mysql": "node backend/scripts/copySqliteToMysql.js"
+    ,"test": "npm run test:unit && npm run test:contract"
+    ,"test:unit": "node tests/unit/ddd.test.js"
+    ,"test:contract": "node tests/contract/routes.test.js && node tests/contract/repositoryAdapters.test.js"
   }
 }

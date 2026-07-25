@@ -6,7 +6,7 @@ const SearchService = (() => {
     if (tagIds && tagIds.length > 0) params.set("tags", tagIds.join(","));
 
     const query = params.toString();
-    const result = await ApiClient.get(`/api/paragraphs${query ? `?${query}` : ""}`);
+    const result = await ClientFacades.corpus.list(query ? `?${query}` : "");
     if (result.allowLocalFallback) return searchLocal(keyword, theme, tagIds);
     return result.ok ? result.paragraphs : [];
   }

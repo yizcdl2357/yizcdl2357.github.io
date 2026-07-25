@@ -1,5 +1,10 @@
 class ThemeService {
+  constructor(themePolicy) {
+    this.themePolicy = themePolicy;
+  }
+
   detectTheme(content) {
+    if (this.themePolicy) return this.themePolicy.detect(content);
     const text = content.trim().toLowerCase();
     const rules = [
       ["成长", ["grow", "growth", "effort", "challenge", "change", "progress", "坚持", "成长", "努力"]],

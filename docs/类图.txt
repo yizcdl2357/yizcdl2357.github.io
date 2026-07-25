@@ -332,3 +332,30 @@ classDiagram
 ```
 
 迁移边界：`CorpusMigrationService` 只读取正文、主题和标签；不依赖、不复制本地 `User` 与 `Collection`。所有迁移语段的 `authorId` 由 `SystemUserResolver` 统一提供。
+
+# DDD 分层关系类图
+
+```mermaid
+classDiagram
+    class HttpController { <<Driving Adapter>> }
+    class UseCaseHandler { <<Application>> }
+    class AggregateRoot { <<Domain>> }
+    class RepositoryPort { <<Domain Port>> }
+    class MySQLAdapter { <<Driven Adapter>> }
+    class SQLiteAdapter { <<Driven Adapter>> }
+    class ApiClient { <<Frontend Client>> }
+    class CompositionRoot { <<Bootstrap>> }
+
+    ApiClient --> HttpController : stable HTTP contract
+    HttpController --> UseCaseHandler : maps DTO
+    UseCaseHandler --> AggregateRoot : executes behavior
+    UseCaseHandler --> RepositoryPort : loads/saves
+    RepositoryPort <|.. MySQLAdapter
+    RepositoryPort <|.. SQLiteAdapter
+    CompositionRoot --> HttpController : injects
+    CompositionRoot --> UseCaseHandler : injects
+    CompositionRoot --> MySQLAdapter : DB_CLIENT=mysql
+    CompositionRoot --> SQLiteAdapter : DB_CLIENT=sqlite
+```
+
+完整边界上下文、聚合、值对象、领域事件、用例和目标目录见 `docs/DDD架构设计.txt`。本图表达的依赖规则优先级高于旧“Service 直接依赖具体 Repository”结构，但不改变旧 API 和数据库契约。

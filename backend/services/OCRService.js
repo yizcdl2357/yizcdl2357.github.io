@@ -1,5 +1,10 @@
 class OCRService {
+  constructor(ocrEngine) {
+    this.ocrEngine = ocrEngine;
+  }
+
   recognizeText() {
+    if (this.ocrEngine) return this.ocrEngine.recognizeText(...arguments);
     return {
       ok: false,
       text: "",

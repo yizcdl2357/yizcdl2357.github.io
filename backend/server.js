@@ -3,10 +3,12 @@ const path = require("path");
 const fs = require("fs");
 const { createContainer } = require("./container");
 const { sendJson } = require("./controllers/helpers");
+const { createRoutes, dispatchRoute } = require("./interfaces/http/routes");
 
 class ApiServer {
   constructor(container) {
     this.container = container;
+    this.routes = createRoutes(container);
   }
 
   start() {
@@ -44,26 +46,7 @@ class ApiServer {
         return sendJson(res, 200, { ok: true, service: "english-corpus-api" });
       }
 
-      if (req.method === "POST" && pathname === "/api/auth/register") return this.container.authController.register(req, res);
-      if (req.method === "POST" && pathname === "/api/auth/login") return this.container.authController.login(req, res);
-      if (req.method === "POST" && pathname === "/api/auth/logout") return this.container.authController.logout(req, res);
-      if (req.method === "GET" && pathname === "/api/auth/me") return this.container.authController.getCurrentUser(req, res);
-      if (req.method === "POST" && pathname === "/api/themes/detect") return this.container.toolController.detectTheme(req, res);
-      if (req.method === "POST" && pathname === "/api/ocr") return this.container.toolController.recognizeText(req, res);
-
-      if (req.method === "GET" && pathname === "/api/paragraphs") return this.container.paragraphController.listParagraphs(req, res, url);
-      if (req.method === "POST" && pathname === "/api/paragraphs") return this.container.paragraphController.createParagraph(req, res);
-      if (req.method === "GET" && pathname === "/api/me/paragraphs") return this.container.paragraphController.listMyParagraphs(req, res);
-      if (req.method === "GET" && pathname === "/api/me/collections") return this.container.collectionController.listMyCollections(req, res);
-
-      const paragraphMatch = pathname.match(/^\/api\/paragraphs\/([^/]+)$/);
-      if (paragraphMatch && req.method === "GET") return this.container.paragraphController.getParagraph(req, res, paragraphMatch[1]);
-      if (paragraphMatch && req.method === "DELETE") return this.container.paragraphController.deleteParagraph(req, res, paragraphMatch[1]);
-
-      const collectionMatch = pathname.match(/^\/api\/paragraphs\/([^/]+)\/collections$/);
-      if (collectionMatch && req.method === "POST") return this.container.collectionController.collectParagraph(req, res, collectionMatch[1]);
-      if (collectionMatch && req.method === "DELETE") return this.container.collectionController.uncollectParagraph(req, res, collectionMatch[1]);
-      if (collectionMatch && req.method === "GET") return this.container.collectionController.getCollectionCount(req, res, collectionMatch[1]);
+      if (await dispatchRoute(this.routes, req, res, pathname, url)) return;
 
       if (req.method === "GET") return this.serveStatic(pathname, res);
 

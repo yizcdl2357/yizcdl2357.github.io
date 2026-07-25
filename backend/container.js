@@ -20,6 +20,19 @@ const { AuthController } = require("./controllers/AuthController");
 const { ParagraphController } = require("./controllers/ParagraphController");
 const { CollectionController } = require("./controllers/CollectionController");
 const { ToolController } = require("./controllers/ToolController");
+const { IdentityUseCases } = require("./application/identity/IdentityUseCases");
+const { CorpusUseCases } = require("./application/corpus/CorpusUseCases");
+const { CollectionUseCases } = require("./application/collection/CollectionUseCases");
+const { ThemeDetectionPolicy } = require("./domain/taxonomy/Taxonomy");
+const { Sha256PasswordHasher } = require("./infrastructure/security/Sha256PasswordHasher");
+const { CryptoIdGenerator, SystemClock } = require("./infrastructure/system/SystemAdapters");
+const { BrowserOcrAdapter } = require("./infrastructure/ocr/BrowserOcrAdapter");
+const {
+  UserRepositoryAdapter,
+  ParagraphRepositoryAdapter,
+  CollectionRepositoryAdapter,
+  TagRepositoryAdapter
+} = require("./infrastructure/persistence/RepositoryAdapters");
 
 async function createContainer() {
   const config = getConfig();
@@ -42,15 +55,25 @@ async function createContainer() {
         ParagraphRepository: SQLiteParagraphRepository
       };
 
-  const tagRepository = new repositories.TagRepository(db);
-  const userRepository = new repositories.UserRepository(db);
-  const collectionRepository = new repositories.CollectionRepository(db);
-  const paragraphRepository = new repositories.ParagraphRepository(db, tagRepository);
-  const themeService = new ThemeService();
-  const ocrService = new OCRService();
-  const authService = new AuthService(userRepository, config.systemUserId);
-  const paragraphService = new ParagraphService(paragraphRepository, tagRepository, collectionRepository, themeService);
-  const collectionService = new CollectionService(collectionRepository, paragraphRepository);
+  const legacyTagRepository = new repositories.TagRepository(db);
+  const userRepository = new UserRepositoryAdapter(new repositories.UserRepository(db));
+  const collectionRepository = new CollectionRepositoryAdapter(new repositories.CollectionRepository(db));
+  const paragraphRepository = new ParagraphRepositoryAdapter(new repositories.ParagraphRepository(db, legacyTagRepository));
+  const tagRepository = new TagRepositoryAdapter(legacyTagRepository);
+  const themePolicy = new ThemeDetectionPolicy();
+  const passwordHasher = new Sha256PasswordHasher();
+  const idGenerator = new CryptoIdGenerator();
+  const clock = new SystemClock();
+  const ocrEngine = new BrowserOcrAdapter();
+
+  const identityUseCases = new IdentityUseCases({ userRepository, passwordHasher, idGenerator, clock, systemUserId: config.systemUserId });
+  const corpusUseCases = new CorpusUseCases({ paragraphRepository, tagRepository, collectionRepository, themePolicy, idGenerator, clock });
+  const collectionUseCases = new CollectionUseCases({ collectionRepository, paragraphRepository, idGenerator, clock });
+  const themeService = new ThemeService(themePolicy);
+  const ocrService = new OCRService(ocrEngine);
+  const authService = new AuthService(identityUseCases);
+  const paragraphService = new ParagraphService(corpusUseCases);
+  const collectionService = new CollectionService(collectionUseCases);
 
   return {
     config,

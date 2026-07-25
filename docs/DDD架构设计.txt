@@ -1,0 +1,324 @@
+# DDD 架构设计
+
+## 目标与不变契约
+
+本次重构只改变代码责任归属和依赖方向，不改变任何外部可观测行为：
+
+- 保留全部 HTTP 路径、方法、请求字段、响应 JSON、中文提示和状态码。
+- 保留 `users / sessions / paragraphs / tags / paragraph_tags / collections` 表名、字段、索引、外键和数据意义。
+- 保留跨站 Cookie、CORS、Railway `/health`、GitHub Pages `/eng/`、MySQL 共享数据和 SQLite 本地开发。
+- 保留前端 DOM ID、`data-page`、页面导航、本地 fallback 边界、文字和最终渲染效果。
+- 迁移仍只处理系统例句的正文、主题和标签，不复制普通用户、收藏和会话。
+
+## 边界上下文与上下文地图
+
+```mermaid
+flowchart LR
+    Client["Frontend Client<br/>GitHub Pages /eng"]
+
+    subgraph Identity["Identity / Auth Context"]
+        User["User Aggregate"]
+        Session["Session Aggregate"]
+        AuthUseCases["Register / Login / Logout / CurrentUser"]
+    end
+
+    subgraph Corpus["Corpus Context"]
+        Paragraph["Paragraph Aggregate"]
+        CorpusQueries["Search / Detail / MyParagraphs"]
+        CorpusCommands["Create / Delete Paragraph"]
+    end
+
+    subgraph Collection["Collection Context"]
+        CollectionRoot["Collection Aggregate"]
+        CollectionCases["Collect / Uncollect / List / Count"]
+    end
+
+    subgraph Taxonomy["Theme / Tag Context"]
+        Theme["ThemeName Value Object"]
+        Tag["Tag / TagSet"]
+        ThemeDetector["ThemeDetection Domain Service"]
+    end
+
+    subgraph Tools["OCR / Tools Context"]
+        OCR["RecognizeText Use Case"]
+        OCRPort["OCR Engine Port"]
+    end
+
+    Client -->|"stable HTTP API"| Identity
+    Client -->|"stable HTTP API"| Corpus
+    Client -->|"stable HTTP API"| Collection
+    Client -->|"stable HTTP API"| Taxonomy
+    Client -->|"stable HTTP API"| Tools
+    Corpus -->|"author identity by UserId"| Identity
+    Corpus -->|"validates ThemeName / TagSet"| Taxonomy
+    Collection -->|"Paragraph existence/read model"| Corpus
+```
+
+### 上下文责任
+
+| 上下文 | 拥有的业务规则 | 不得拥有 |
+| --- | --- | --- |
+| Identity / Auth | 用户名唯一、密码验证、系统用户禁登、会话创建/销毁 | 语段搜索、收藏计数 |
+| Corpus | 语段内容长度、主题必填、标签有效、作者才能删除 | Cookie 解析、SQL 连接池 |
+| Collection | 收藏唯一、语段存在时才可收藏、取消收藏 | 修改语段正文或用户密码 |
+| Theme / Tag | 主题值规范化、标签枚举和主题推荐 | 持久化会话、HTTP 响应 |
+| OCR / Tools | 图片文字识别用例和引擎端口 | 直接创建语段或收藏 |
+
+## 领域模型
+
+```mermaid
+classDiagram
+    class User {
+        <<Aggregate Root>>
+        +UserId id
+        +Username username
+        +PasswordHash passwordHash
+        +CreatedAt createdAt
+        +verifyPassword(rawPassword, hasher)
+        +canLogin(systemUserId)
+    }
+
+    class Session {
+        <<Aggregate Root>>
+        +SessionId id
+        +UserId userId
+        +CreatedAt createdAt
+    }
+
+    class Paragraph {
+        <<Aggregate Root>>
+        +ParagraphId id
+        +ParagraphContent content
+        +UserId authorId
+        +ThemeName theme
+        +TagSet tags
+        +CreatedAt createdAt
+        +UpdatedAt updatedAt
+        +renameTheme(theme)
+        +replaceTags(tags)
+        +assertDeletableBy(userId)
+    }
+
+    class Collection {
+        <<Aggregate Root>>
+        +CollectionId id
+        +UserId userId
+        +ParagraphId paragraphId
+        +CreatedAt createdAt
+    }
+
+    class Username { <<Value Object>> }
+    class PasswordHash { <<Value Object>> }
+    class ParagraphContent { <<Value Object>> }
+    class ThemeName { <<Value Object>> }
+    class TagSet { <<Value Object>> }
+    class UserId { <<Value Object>> }
+    class ParagraphId { <<Value Object>> }
+
+    class UserRegistered { <<Domain Event>> }
+    class SessionStarted { <<Domain Event>> }
+    class ParagraphCreated { <<Domain Event>> }
+    class ParagraphDeleted { <<Domain Event>> }
+    class ParagraphCollected { <<Domain Event>> }
+    class ParagraphUncollected { <<Domain Event>> }
+
+    User *-- Username
+    User *-- PasswordHash
+    Paragraph *-- ParagraphContent
+    Paragraph *-- ThemeName
+    Paragraph *-- TagSet
+    Collection --> ParagraphId
+    Collection --> UserId
+    User ..> UserRegistered
+    Session ..> SessionStarted
+    Paragraph ..> ParagraphCreated
+    Paragraph ..> ParagraphDeleted
+    Collection ..> ParagraphCollected
+    Collection ..> ParagraphUncollected
+```
+
+领域事件在首次重构中为进程内事件，用于表达状态变化和解耦后续动作；不新增 event/outbox 数据表，不改变现有事务边界。只有当后续确实需要可靠异步发布时，才单独设计 Outbox。
+
+## 分层与依赖方向
+
+```mermaid
+flowchart TB
+    Delivery["Interfaces / Delivery<br/>HTTP Router, Controllers, CORS, Cookie, JSON Mapper"]
+    Application["Application<br/>Commands, Queries, Use-case Handlers, DTOs, Unit of Work"]
+    Domain["Domain<br/>Aggregates, Value Objects, Domain Services, Events, Repository Ports"]
+    Infrastructure["Infrastructure<br/>MySQL, SQLite, Crypto, Clock, UUID, OCR Adapter, Config"]
+    Client["Frontend Application Client<br/>Pages, ApiClient, UI Rendering"]
+
+    Client --> Delivery
+    Delivery --> Application
+    Application --> Domain
+    Infrastructure --> Domain
+    Delivery --> Infrastructure : composition only
+```
+
+核心约束：Domain 不能 `require` HTTP、Node `req/res`、MySQL/SQLite、环境变量、前端 UI 或 Railway；Application 不能依赖具体 Repository adapter。所有具体类只在 composition root 中组装。
+
+## 应用层用例
+
+| 上下文 | Command / Query | 不变的 HTTP 入口 |
+| --- | --- | --- |
+| Identity | `RegisterUserCommand` | `POST /api/auth/register` |
+| Identity | `LoginCommand` / `LogoutCommand` | `POST /api/auth/login`, `POST /api/auth/logout` |
+| Identity | `GetCurrentUserQuery` | `GET /api/auth/me` |
+| Corpus | `CreateParagraphCommand` | `POST /api/paragraphs` |
+| Corpus | `DeleteParagraphCommand` | `DELETE /api/paragraphs/:id` |
+| Corpus | `GetParagraphQuery` / `SearchParagraphsQuery` | `GET /api/paragraphs/:id`, `GET /api/paragraphs` |
+| Corpus | `ListMyParagraphsQuery` | `GET /api/me/paragraphs` |
+| Collection | `CollectParagraphCommand` / `UncollectParagraphCommand` | `POST/DELETE /api/paragraphs/:id/collections` |
+| Collection | `ListMyCollectionsQuery` / `GetCollectionCountQuery` | `GET /api/me/collections`, `GET /api/paragraphs/:id/collections` |
+| Theme | `DetectThemeQuery` | `POST /api/themes/detect` |
+| OCR | `RecognizeTextCommand` | `POST /api/ocr` |
+
+Application handler 负责编排事务、调用聚合、保存聚合并生成 DTO；不包含 `req/res`、Cookie 字符串或 SQL。
+
+## 端口与适配器
+
+```mermaid
+classDiagram
+    class UserRepositoryPort {
+        <<Port>>
+        +save(user)
+        +findById(userId)
+        +findByUsername(username)
+    }
+    class SessionRepositoryPort {
+        <<Port>>
+        +save(session)
+        +findById(sessionId)
+        +delete(sessionId)
+    }
+    class ParagraphRepositoryPort {
+        <<Port>>
+        +save(paragraph)
+        +findById(paragraphId)
+        +search(criteria)
+        +findByAuthor(userId)
+        +delete(paragraphId)
+    }
+    class CollectionRepositoryPort {
+        <<Port>>
+        +save(collection)
+        +delete(userId, paragraphId)
+        +findByUser(userId)
+        +exists(userId, paragraphId)
+        +countByParagraph(paragraphId)
+    }
+    class TagRepositoryPort {
+        <<Port>>
+        +findAll()
+        +validate(tagSet)
+    }
+    class PasswordHasherPort { <<Port>> }
+    class IdGeneratorPort { <<Port>> }
+    class ClockPort { <<Port>> }
+    class OcrEnginePort { <<Port>> }
+    class UnitOfWorkPort { <<Port>> }
+
+    class MySQLRepositories { <<Driven Adapter>> }
+    class SQLiteRepositories { <<Driven Adapter>> }
+    class Sha256PasswordHasher { <<Driven Adapter>> }
+    class CryptoUuidGenerator { <<Driven Adapter>> }
+    class SystemClock { <<Driven Adapter>> }
+    class ExistingOcrAdapter { <<Driven Adapter>> }
+    class HttpControllers { <<Driving Adapter>> }
+    class MigrationCli { <<Driving Adapter>> }
+
+    UserRepositoryPort <|.. MySQLRepositories
+    SessionRepositoryPort <|.. MySQLRepositories
+    ParagraphRepositoryPort <|.. MySQLRepositories
+    CollectionRepositoryPort <|.. MySQLRepositories
+    TagRepositoryPort <|.. MySQLRepositories
+    UserRepositoryPort <|.. SQLiteRepositories
+    SessionRepositoryPort <|.. SQLiteRepositories
+    ParagraphRepositoryPort <|.. SQLiteRepositories
+    CollectionRepositoryPort <|.. SQLiteRepositories
+    TagRepositoryPort <|.. SQLiteRepositories
+    PasswordHasherPort <|.. Sha256PasswordHasher
+    IdGeneratorPort <|.. CryptoUuidGenerator
+    ClockPort <|.. SystemClock
+    OcrEnginePort <|.. ExistingOcrAdapter
+    HttpControllers --> UserRepositoryPort
+    MigrationCli --> UnitOfWorkPort
+```
+
+## 前端的 DDD 位置
+
+前端是后端各上下文的应用客户端，不复制后端聚合或数据库规则。
+
+```text
+js/apiClient.js             只处理 HTTP/CORS/credentials/错误映射
+js/authService.js           作为 Identity 客户端 facade
+js/paragraphService.js      作为 Corpus 客户端 facade
+js/collectionService.js     作为 Collection 客户端 facade
+js/themeService.js          作为 Theme 客端/本地演示 adapter
+js/ui.js + js/app.js        页面流程、DOM 渲染和事件绑定
+js/storage.js               仅本地演示 adapter，云 API 配置后不得成为权威数据源
+```
+
+重构不得更改这些脚本的加载顺序、全局对象名、现有 DOM 调用方式和 API DTO。
+
+## 数据持久化与迁移边界
+
+- Repository adapter 负责 Domain 对象与现有表行的映射；Domain 不包含 `password_hash` 等 SQL 命名细节。
+- MySQL 和 SQLite 实现同一端口行为，包括排序、标签过滤、收藏唯一性和会话持久化。
+- 现有 SQL migration 是 Infrastructure 资产，DDD 重构不触发 schema 重命名、数据回填或破坏性 migration。
+- `copySqliteToMysql` 是 Corpus 的一次性 application/CLI adapter；只读 `SOURCE_SYSTEM_USER_ID` 语段，通过现有幂等策略写入 `SYSTEM_USER_ID`。
+- 迁移脚本不绕过系统用户规则，不复制本地普通用户、收藏、Session 或凭据。
+
+## 目标目录结构
+
+```text
+backend/
+  domain/
+    identity/              User, Session, value objects, events, repository ports
+    corpus/                Paragraph, search criteria, events, repository port
+    collection/            Collection, events, repository port
+    taxonomy/              ThemeName, TagSet, detection policy
+    tools/                 OCR engine port
+  application/
+    identity/              Register/Login/Logout/GetCurrentUser handlers and DTOs
+    corpus/                Create/Delete/Get/Search/ListMy handlers and DTOs
+    collection/            Collect/Uncollect/List/Count handlers and DTOs
+    taxonomy/              DetectTheme handler
+    tools/                 RecognizeText handler
+    shared/                UnitOfWork port and result/error mapping
+  interfaces/
+    http/                  router, controllers, JSON/cookie/CORS mapping
+    cli/                   migrate, seed, copy-system-corpus entry points
+  infrastructure/
+    persistence/mysql/     provider, row mappers, repository adapters, UoW
+    persistence/sqlite/    provider, row mappers, repository adapters, UoW
+    security/              password hasher
+    system/                UUID, clock, configuration
+    ocr/                   existing OCR adapter
+  bootstrap/
+    container.js           composition root only
+  server.js                process lifecycle only
+```
+
+## 程序员重构顺序与约束
+
+1. 先锁定契约：为现有 API 请求/响应、Cookie、CORS、Repository 行为和前端渲染补齐回归测试。
+2. 首先提取 Domain 类和值对象，保持旧 Service 作为兼容 facade；不一次性重写 Controller 与 Repository。
+3. 将旧 Service 逻辑逐个迁入 Application handler，Controller 继续返回完全相同的 JSON 和状态码。
+4. 再提取 Repository ports 和 row mapper，使 MySQL/SQLite adapter 通过同一契约测试。
+5. 最后精简 `container.js`，它只负责根据 `DB_CLIENT` 装配端口和适配器。
+6. 每个上下文单独迁移并测试；任一阶段不得同时改数据库 schema、API 契约、前端结构或 CSS。
+7. 禁止在 Domain 内使用单例全局容器、Service Locator、`process.env`、SQL 或 `req/res`。
+8. 禁止为了“更像 DDD”而新增无业务含义的空类；值对象只承载真实不变式。
+9. 领域事件先保持进程内，不引入新表、消息队列或异步最终一致性。
+10. Railway/GitHub Pages 文件、环境变量名、公开域名和启动/健康检查命令保持不变。
+
+## 验收清单
+
+- 回归现有 API 全部路径、状态码、响应文字和数据排序。
+- 同一套 Repository contract tests 分别运行 MySQL 和 SQLite adapter。
+- 注册、登录、跨站 Cookie、上传、搜索、详情、收藏/取消、删除和跨标签共享结果不变。
+- `/health` 、Railway 优雅关闭、CORS 预检和 Pages `runtimeConfig.js` 不变。
+- 现有 MySQL 数据无需迁移也能直接运行，系统例句、普通用户和收藏不丢失。
+- GitHub Pages 的页面文字、DOM 结构、响应式和视觉像素结果不变。
