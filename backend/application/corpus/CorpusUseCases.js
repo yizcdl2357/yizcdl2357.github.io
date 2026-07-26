@@ -69,6 +69,7 @@ class CorpusUseCases {
 
   async attachCollectionCounts(paragraphs) {
     if (!paragraphs.length) return [];
+    if (paragraphs.every((paragraph) => Number.isFinite(paragraph.collectionCount))) return paragraphs;
     const counts = await this.collectionRepository.countByParagraphIds?.(paragraphs.map((paragraph) => paragraph.id));
     if (!counts) return Promise.all(paragraphs.map((paragraph) => this.attachCollectionCount(paragraph)));
     return paragraphs.map((paragraph) => ({ ...paragraph, collectionCount: counts.get(paragraph.id) || 0 }));

@@ -105,8 +105,7 @@ class MySQLParagraphRepository {
   }
 
   async findByUserId(userId) {
-    const [rows] = await this.db.query("SELECT * FROM paragraphs WHERE author_id = ? ORDER BY created_at DESC", [userId]);
-    return this.withTagsBatch(rows);
+    return this.listWithRelationsSingleQuery("WHERE p.author_id = ?", [userId]);
   }
 
   async search(keyword = "", theme = "", tags = []) {
@@ -114,17 +113,17 @@ class MySQLParagraphRepository {
     const params = [];
 
     if (keyword) {
-      clauses.push("content LIKE ?");
+      clauses.push("p.content LIKE ?");
       params.push(`%${keyword}%`);
     }
 
     if (theme) {
-      clauses.push("theme LIKE ?");
+      clauses.push("p.theme LIKE ?");
       params.push(`%${theme}%`);
     }
 
     if (tags && tags.length > 0) {
-      clauses.push(`id IN (
+      clauses.push(`p.id IN (
         SELECT paragraph_id FROM paragraph_tags
         WHERE tag_id IN (${tags.map(() => "?").join(",")})
         GROUP BY paragraph_id
@@ -134,8 +133,7 @@ class MySQLParagraphRepository {
     }
 
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const [rows] = await this.db.query(`SELECT * FROM paragraphs ${where} ORDER BY created_at DESC`, params);
-    return this.withTagsBatch(rows);
+    return this.listWithRelationsSingleQuery(where, params);
   }
 
   async deleteById(id) {
@@ -218,6 +216,70 @@ class MySQLParagraphRepository {
         updatedAt: row.updated_at
       };
     });
+  }
+
+  async listWithRelations(where, params) {
+    const [rows] = await this.db.query(
+      `SELECT paragraphs.*, users.username AS author_name,
+              GROUP_CONCAT(DISTINCT tags.id ORDER BY tags.sort_order, tags.id SEPARATOR '\\x1f') AS tag_ids,
+              GROUP_CONCAT(DISTINCT tags.name ORDER BY tags.sort_order, tags.id SEPARATOR '\\x1f') AS tag_names,
+              COUNT(DISTINCT collections.id) AS collection_count
+       FROM paragraphs
+       LEFT JOIN users ON users.id = paragraphs.author_id
+       LEFT JOIN paragraph_tags ON paragraph_tags.paragraph_id = paragraphs.id
+       LEFT JOIN tags ON tags.id = paragraph_tags.tag_id
+       LEFT JOIN collections ON collections.paragraph_id = paragraphs.id
+       ${where}
+       GROUP BY paragraphs.id, paragraphs.content, paragraphs.author_id, paragraphs.theme,
+                paragraphs.created_at, paragraphs.updated_at, users.username
+       ORDER BY paragraphs.created_at DESC`,
+      params
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      content: row.content,
+      authorId: row.author_id,
+      authorName: row.author_name || "系统示例",
+      theme: row.theme,
+      themeName: row.theme,
+      tags: row.tag_ids ? row.tag_ids.split("\x1f") : [],
+      tagNames: row.tag_names ? row.tag_names.split("\x1f") : [],
+      collectionCount: Number(row.collection_count || 0),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  async listWithRelationsSingleQuery(where, params) {
+    const [rows] = await this.db.query(
+      `SELECT p.*, u.username AS author_name, t.id AS tag_id, t.name AS tag_name,
+              COALESCE(cc.collection_count, 0) AS collection_count
+       FROM paragraphs p
+       LEFT JOIN users u ON u.id = p.author_id
+       LEFT JOIN paragraph_tags pt ON pt.paragraph_id = p.id
+       LEFT JOIN tags t ON t.id = pt.tag_id
+       LEFT JOIN (
+         SELECT paragraph_id, COUNT(*) AS collection_count FROM collections GROUP BY paragraph_id
+       ) cc ON cc.paragraph_id = p.id
+       ${where}
+       ORDER BY p.created_at DESC, t.sort_order, t.id`, params
+    );
+    const paragraphs = new Map();
+    for (const row of rows) {
+      if (!paragraphs.has(row.id)) {
+        paragraphs.set(row.id, {
+          id: row.id, content: row.content, authorId: row.author_id,
+          authorName: row.author_name || "系统示例", theme: row.theme, themeName: row.theme,
+          tags: [], tagNames: [], collectionCount: Number(row.collection_count || 0),
+          createdAt: row.created_at, updatedAt: row.updated_at
+        });
+      }
+      if (row.tag_id) {
+        paragraphs.get(row.id).tags.push(row.tag_id);
+        paragraphs.get(row.id).tagNames.push(row.tag_name);
+      }
+    }
+    return [...paragraphs.values()];
   }
 }
 
