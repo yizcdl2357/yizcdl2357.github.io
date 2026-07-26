@@ -199,7 +199,7 @@ async function recognizeImageText() {
     return;
   }
 
-  if (!window.Tesseract) {
+  if (!window.Tesseract && !(await loadTesseractScript())) {
     UI.showMessage("ocrMessage", "文字识别库加载失败，请检查网络后重试");
     return;
   }
@@ -224,6 +224,21 @@ async function recognizeImageText() {
   } finally {
     button.disabled = false;
   }
+}
+
+let tesseractLoadPromise;
+function loadTesseractScript() {
+  if (window.Tesseract) return Promise.resolve(true);
+  if (tesseractLoadPromise) return tesseractLoadPromise;
+  tesseractLoadPromise = new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+  return tesseractLoadPromise;
 }
 
 async function recognizeWithMultipleAngles(file) {
@@ -362,15 +377,17 @@ async function deleteMyParagraph(paragraphId) {
 
 async function initializeApp() {
   Storage.initialize();
-  await AuthService.initialize();
-  if (AuthService.getCurrentUser()) await CollectionService.refreshMyCollections();
+  const authPromise = AuthService.initialize();
+  const homePromise = UI.renderHome();
   UI.renderTagOptions("uploadTags", "uploadTags");
   UI.renderTagOptions("searchTags", "searchTags");
   UI.renderAuthArea();
-  await UI.renderHome();
-  await UI.renderCorpus();
   bindNavigation();
   bindForms();
+  await authPromise;
+  if (AuthService.getCurrentUser()) await CollectionService.refreshMyCollections();
+  UI.renderAuthArea();
+  await homePromise;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
