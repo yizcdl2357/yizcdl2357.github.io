@@ -106,7 +106,7 @@ class MySQLParagraphRepository {
 
   async findByUserId(userId) {
     const [rows] = await this.db.query("SELECT * FROM paragraphs WHERE author_id = ? ORDER BY created_at DESC", [userId]);
-    return Promise.all(rows.map((row) => this.withTags(row)));
+    return this.withTagsBatch(rows);
   }
 
   async search(keyword = "", theme = "", tags = []) {
@@ -135,7 +135,7 @@ class MySQLParagraphRepository {
 
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const [rows] = await this.db.query(`SELECT * FROM paragraphs ${where} ORDER BY created_at DESC`, params);
-    return Promise.all(rows.map((row) => this.withTags(row)));
+    return this.withTagsBatch(rows);
   }
 
   async deleteById(id) {
@@ -182,6 +182,43 @@ class MySQLParagraphRepository {
       updatedAt: row.updated_at
     };
   }
+
+  async withTagsBatch(rows) {
+    if (!rows.length) return [];
+    const ids = rows.map((row) => row.id);
+    const authorIds = [...new Set(rows.map((row) => row.author_id))];
+    const [tagRows] = await this.db.query(
+      `SELECT paragraph_tags.paragraph_id, tags.id, tags.name
+       FROM paragraph_tags JOIN tags ON tags.id = paragraph_tags.tag_id
+       WHERE paragraph_tags.paragraph_id IN (${ids.map(() => "?").join(",")})
+       ORDER BY tags.sort_order, tags.id`, ids
+    );
+    const [userRows] = await this.db.query(
+      `SELECT id, username FROM users WHERE id IN (${authorIds.map(() => "?").join(",")})`, authorIds
+    );
+    const tagsByParagraph = new Map();
+    tagRows.forEach((tag) => {
+      const list = tagsByParagraph.get(tag.paragraph_id) || [];
+      list.push(tag);
+      tagsByParagraph.set(tag.paragraph_id, list);
+    });
+    const usersById = new Map(userRows.map((user) => [user.id, user.username]));
+    return rows.map((row) => {
+      const tags = tagsByParagraph.get(row.id) || [];
+      return {
+        id: row.id,
+        content: row.content,
+        authorId: row.author_id,
+        authorName: usersById.get(row.author_id) || "系统示例",
+        theme: row.theme,
+        themeName: row.theme,
+        tags: tags.map((tag) => tag.id),
+        tagNames: tags.map((tag) => tag.name),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    });
+  }
 }
 
 class MySQLCollectionRepository {
@@ -213,6 +250,14 @@ class MySQLCollectionRepository {
   async countByParagraphId(paragraphId) {
     const [rows] = await this.db.query("SELECT COUNT(*) AS count FROM collections WHERE paragraph_id = ?", [paragraphId]);
     return rows[0].count;
+  }
+
+  async countByParagraphIds(ids) {
+    if (!ids.length) return new Map();
+    const [rows] = await this.db.query(
+      `SELECT paragraph_id, COUNT(*) AS count FROM collections WHERE paragraph_id IN (${ids.map(() => "?").join(",")}) GROUP BY paragraph_id`, ids
+    );
+    return new Map(rows.map((row) => [row.paragraph_id, Number(row.count)]));
   }
 
   async exists(userId, paragraphId) {

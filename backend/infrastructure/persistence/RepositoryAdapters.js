@@ -23,6 +23,7 @@ class CollectionRepositoryAdapter {
   delete(userId, paragraphId) { return this.repository.delete(userId, paragraphId); }
   findByUserId(userId) { return this.repository.findByUserId(userId); }
   countByParagraphId(paragraphId) { return this.repository.countByParagraphId(paragraphId); }
+  countByParagraphIds(ids) { return this.repository.countByParagraphIds?.(ids); }
   exists(userId, paragraphId) { return this.repository.exists(userId, paragraphId); }
   deleteByParagraphId(paragraphId) { return this.repository.deleteByParagraphId(paragraphId); }
 }

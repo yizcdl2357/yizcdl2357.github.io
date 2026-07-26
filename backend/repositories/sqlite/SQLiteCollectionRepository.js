@@ -27,6 +27,12 @@ class SQLiteCollectionRepository {
     return this.db.get("SELECT COUNT(*) AS count FROM collections WHERE paragraph_id = ?", [paragraphId]).count;
   }
 
+  countByParagraphIds(ids) {
+    const counts = new Map();
+    ids.forEach((id) => counts.set(id, this.countByParagraphId(id)));
+    return counts;
+  }
+
   exists(userId, paragraphId) {
     return Boolean(this.db.get("SELECT id FROM collections WHERE user_id = ? AND paragraph_id = ?", [userId, paragraphId]));
   }

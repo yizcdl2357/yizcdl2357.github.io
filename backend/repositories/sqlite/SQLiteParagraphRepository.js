@@ -22,7 +22,7 @@ class SQLiteParagraphRepository {
   }
 
   findByUserId(userId) {
-    return this.db.all("SELECT * FROM paragraphs WHERE author_id = ? ORDER BY created_at DESC", [userId]).map((row) => this.withTags(row));
+    return this.withTagsBatch(this.db.all("SELECT * FROM paragraphs WHERE author_id = ? ORDER BY created_at DESC", [userId]));
   }
 
   search(keyword = "", theme = "", tags = []) {
@@ -50,7 +50,7 @@ class SQLiteParagraphRepository {
     }
 
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return this.db.all(`SELECT * FROM paragraphs ${where} ORDER BY created_at DESC`, params).map((row) => this.withTags(row));
+    return this.withTagsBatch(this.db.all(`SELECT * FROM paragraphs ${where} ORDER BY created_at DESC`, params));
   }
 
   deleteById(id) {
@@ -82,6 +82,10 @@ class SQLiteParagraphRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
+  }
+
+  withTagsBatch(rows) {
+    return rows.map((row) => this.withTags(row));
   }
 }
 

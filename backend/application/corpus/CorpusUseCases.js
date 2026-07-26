@@ -38,13 +38,13 @@ class CorpusUseCases {
 
   async search({ keyword = "", theme = "", tags = [] }) {
     const rows = await this.paragraphRepository.search(keyword, theme, tags);
-    const enriched = await Promise.all(rows.map((row) => this.attachCollectionCount(row)));
+    const enriched = await this.attachCollectionCounts(rows);
     return enriched.sort((a, b) => b.collectionCount - a.collectionCount || new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   async listByUser({ userId }) {
     const rows = await this.paragraphRepository.findByUserId(userId);
-    return Promise.all(rows.map((row) => this.attachCollectionCount(row)));
+    return this.attachCollectionCounts(rows);
   }
 
   async delete({ userId, paragraphId }) {
@@ -65,6 +65,13 @@ class CorpusUseCases {
 
   async attachCollectionCount(paragraph) {
     return { ...paragraph, collectionCount: await this.collectionRepository.countByParagraphId(paragraph.id) };
+  }
+
+  async attachCollectionCounts(paragraphs) {
+    if (!paragraphs.length) return [];
+    const counts = await this.collectionRepository.countByParagraphIds?.(paragraphs.map((paragraph) => paragraph.id));
+    if (!counts) return Promise.all(paragraphs.map((paragraph) => this.attachCollectionCount(paragraph)));
+    return paragraphs.map((paragraph) => ({ ...paragraph, collectionCount: counts.get(paragraph.id) || 0 }));
   }
 }
 
