@@ -29,7 +29,10 @@ async function ensureParagraphReview(config, provider) {
     for (const [name, definition] of Object.entries(definitions)) if (!existing.has(name)) await db.query(`ALTER TABLE paragraphs ADD COLUMN ${name} ${definition}`);
     await db.query("UPDATE paragraphs SET status='approved' WHERE status IS NULL OR status NOT IN ('pending','approved','rejected')");
     await db.query("UPDATE paragraphs SET submitted_at=created_at WHERE submitted_at IS NULL");
-    await db.query("CREATE INDEX IF NOT EXISTS idx_paragraphs_review_queue ON paragraphs(status, submitted_at, id)");
+    const [indexes] = await db.query(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='paragraphs' AND INDEX_NAME='idx_paragraphs_review_queue'"
+    );
+    if (!indexes.length) await db.query("CREATE INDEX idx_paragraphs_review_queue ON paragraphs(status, submitted_at, id)");
   } else {
     const existing = new Set(db.all("PRAGMA table_info(paragraphs)").map((row) => row.name));
     for (const [name, definition] of Object.entries(definitions)) if (!existing.has(name)) db.run(`ALTER TABLE paragraphs ADD COLUMN ${name} ${definition}`);
