@@ -5,8 +5,8 @@ class MySQLUserRepository {
 
   async create(user) {
     await this.db.query(
-      "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-      [user.id, user.username, user.passwordHash, user.createdAt]
+      "INSERT INTO users (id, username, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+      [user.id, user.username, user.role || "user", user.passwordHash, user.createdAt]
     );
     return this.findById(user.id);
   }
@@ -45,6 +45,7 @@ class MySQLUserRepository {
     return {
       id: row.id,
       username: row.username,
+      role: row.role || "user",
       passwordHash: row.password_hash,
       createdAt: row.created_at
     };

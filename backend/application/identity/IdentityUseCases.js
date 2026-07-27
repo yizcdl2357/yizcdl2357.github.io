@@ -64,7 +64,7 @@ class IdentityUseCases {
 
   publicUser(user) {
     if (!user) return null;
-    return { id: user.id, username: user.username?.value || user.username, createdAt: user.createdAt };
+    return { id: user.id, username: user.username?.value || user.username, role: user.role?.value || user.role || "user", createdAt: user.createdAt };
   }
 
   failure(error) {

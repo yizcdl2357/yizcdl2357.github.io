@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL DEFAULT 'user',
   password_hash TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
