@@ -12,6 +12,12 @@ window.ClientUseCases = (() => ({
     list: (query = "") => ApiGateway.get(`/api/paragraphs${query}`),
     delete: (id) => ApiGateway.del(`/api/paragraphs/${encodeURIComponent(id)}`)
   },
+  moderation: {
+    next: () => ApiGateway.get("/api/reviews/next"),
+    update: (id, data) => ApiGateway.patch(`/api/reviews/${encodeURIComponent(id)}`, data),
+    approve: (id, expectedVersion) => ApiGateway.post(`/api/reviews/${encodeURIComponent(id)}/approve`, { expectedVersion }),
+    reject: (id, expectedVersion, reason) => ApiGateway.post(`/api/reviews/${encodeURIComponent(id)}/reject`, { expectedVersion, reason })
+  },
   collection: {
     listMine: () => ApiGateway.get("/api/me/collections"),
     count: (id) => ApiGateway.get(`/api/paragraphs/${encodeURIComponent(id)}/collections`),

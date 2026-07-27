@@ -7,7 +7,8 @@ const UI = (() => {
     corpus: "corpusPage",
     profile: "profilePage",
     collections: "collectionPage",
-    detail: "paragraphDetailPage"
+    detail: "paragraphDetailPage",
+    review: "reviewPage"
   };
 
   function $(id) {
@@ -47,6 +48,7 @@ const UI = (() => {
     }
 
     area.innerHTML = `
+      ${currentUser.role === "admin" ? '<button data-page="review" type="button">审查</button>' : ''}
       <button data-page="profile" type="button">${currentUser.username}</button>
       <button id="logoutButton" type="button">登出</button>
     `;
@@ -153,6 +155,7 @@ const UI = (() => {
             ${isCollected ? "取消收藏" : "收藏"}
           </button>
           <span class="count-pill">收藏数 ${paragraph.collectionCount || 0}</span>
+          ${(currentUser && (currentUser.role === "admin" || currentUser.id === paragraph.authorId)) ? `<button class="danger-button delete-detail-button" data-paragraph-id="${paragraph.id}" type="button">删除</button>` : ""}
         </div>
       </article>
     `;
@@ -193,7 +196,12 @@ const UI = (() => {
     if (!currentUser) return false;
 
     const paragraphs = await ParagraphService.getParagraphsByUser(currentUser.id);
+    const pending = paragraphs.filter((item) => item.status === "pending");
+    const rejected = paragraphs.filter((item) => item.status === "rejected");
+    paragraphs.splice(0, paragraphs.length, ...paragraphs.filter((item) => (item.status || "approved") === "approved"));
     const container = $("profileList");
+    $("profilePendingList").innerHTML = pending.length ? pending.map((p) => `<article class="paragraph-card"><div class="meta"><span>待审核</span></div><p class="paragraph-content">${getContentSummary(p.content)}</p><button class="danger-button delete-paragraph-button" data-paragraph-id="${p.id}" type="button">删除</button></article>`).join("") : `<div class="empty">暂无待审核语段。</div>`;
+    $("profileRejectedList").innerHTML = rejected.length ? rejected.map((p) => `<article class="paragraph-card"><div class="meta"><span>已拒绝</span></div><p class="paragraph-content">${getContentSummary(p.content)}</p>${p.rejectionReason ? `<p class="message">${p.rejectionReason}</p>` : ""}</article>`).join("") : `<div class="empty">暂无已拒绝语段。</div>`;
 
     if (paragraphs.length === 0) {
       container.innerHTML = `<div class="empty">你还没有上传语段。</div>`;
@@ -251,6 +259,25 @@ const UI = (() => {
     $("uploadForm").reset();
   }
 
+  let currentReview = null;
+  async function renderReview() {
+    const result = await ModerationService.next();
+    currentReview = result.submission || null;
+    const form = $("reviewForm");
+    if (!currentReview) {
+      form.hidden = true;
+      return true;
+    }
+    form.hidden = false;
+    $("reviewMeta").textContent = `${currentReview.authorName || ""} · ${formatDate(currentReview.submittedAt)}`;
+    $("reviewContent").value = currentReview.content;
+    $("reviewTheme").value = currentReview.theme;
+    document.querySelectorAll('input[name="reviewTags"]').forEach((item) => item.checked = currentReview.tags.includes(item.value));
+    return true;
+  }
+
+  function getCurrentReview() { return currentReview; }
+
   return {
     $,
     showPage,
@@ -266,5 +293,6 @@ const UI = (() => {
     renderParagraphDetail,
     updateDetailCollectionState,
     resetUploadForm
+    ,renderReview,getCurrentReview
   };
 })();

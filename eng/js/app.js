@@ -3,6 +3,10 @@ let themeDetectionTimer = null;
 let autoSuggestedTheme = "";
 
 async function goToPage(page) {
+  if (page === "review" && AuthService.getCurrentUser()?.role !== "admin") {
+    UI.showPage("home");
+    return;
+  }
   if ((page === "upload" || page === "profile" || page === "collections") && !AuthService.getCurrentUser()) {
     UI.showPage("login");
     UI.showMessage("loginMessage", "请先登录");
@@ -13,6 +17,7 @@ async function goToPage(page) {
   if (page === "corpus") await UI.renderCorpus();
   if (page === "profile" && !await UI.renderProfile()) return;
   if (page === "collections" && !await UI.renderCollections()) return;
+  if (page === "review") await UI.renderReview();
 
   UI.showPage(page);
 }
@@ -41,6 +46,16 @@ function bindNavigation() {
     const deleteButton = event.target.closest(".delete-paragraph-button");
     if (deleteButton) {
       await deleteMyParagraph(deleteButton.dataset.paragraphId);
+      return;
+    }
+
+    const detailDelete = event.target.closest(".delete-detail-button");
+    if (detailDelete) {
+      if (window.confirm("确定删除该语段吗？")) {
+        await ParagraphService.deleteParagraph(detailDelete.dataset.paragraphId);
+        await UI.renderCorpus();
+        UI.showPage("corpus");
+      }
       return;
     }
 
@@ -167,6 +182,17 @@ function bindForms() {
     );
     await UI.renderCorpus(result);
   });
+
+  for (const [buttonId, action] of [["saveReviewButton","update"],["approveReviewButton","approve"],["rejectReviewButton","reject"]]) {
+    UI.$(buttonId).addEventListener("click", async () => {
+      const review = UI.getCurrentReview();
+      if (!review) return;
+      const data = action === "update" ? { content:UI.$("reviewContent").value,theme:UI.$("reviewTheme").value,tags:UI.getCheckedValues("reviewTags"),expectedVersion:review.reviewVersion } : null;
+      const result = action === "update" ? await ModerationService.update(review.id,data) : action === "approve" ? await ModerationService.approve(review.id,review.reviewVersion) : await ModerationService.reject(review.id,review.reviewVersion,UI.$("reviewReason").value);
+      UI.showMessage("reviewMessage", result.message || (result.ok ? "操作成功" : "操作失败"), result.ok);
+      if (result.ok) await UI.renderReview();
+    });
+  }
 }
 
 function applyThemeSuggestion(userEditedTheme) {
@@ -381,6 +407,7 @@ async function initializeApp() {
   const homePromise = UI.renderHome();
   UI.renderTagOptions("uploadTags", "uploadTags");
   UI.renderTagOptions("searchTags", "searchTags");
+  UI.renderTagOptions("reviewTags", "reviewTags");
   UI.renderAuthArea();
   bindNavigation();
   bindForms();

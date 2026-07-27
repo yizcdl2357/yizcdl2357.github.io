@@ -84,11 +84,15 @@ const ApiClient = (() => {
     });
   }
 
+  function patch(path, body = {}) {
+    return request(path, { method: "PATCH", body: JSON.stringify(body) }).finally(invalidateParagraphReads);
+  }
+
   function invalidateParagraphReads() {
     for (const key of readCache.keys()) {
       if (key.includes("/api/paragraphs")) readCache.delete(key);
     }
   }
 
-  return { get, post, del, invalidateParagraphReads };
+  return { get, post, patch, del, invalidateParagraphReads };
 })();
