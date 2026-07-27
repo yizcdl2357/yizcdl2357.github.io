@@ -83,8 +83,8 @@ class MySQLParagraphRepository {
     try {
       await connection.beginTransaction();
       await connection.query(
-        "INSERT INTO paragraphs (id, content, author_id, theme, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [paragraph.id, paragraph.content, paragraph.authorId, paragraph.theme, paragraph.createdAt, paragraph.updatedAt]
+        "INSERT INTO paragraphs (id,content,author_id,theme,status,submitted_at,review_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        [paragraph.id,paragraph.content,paragraph.authorId,paragraph.theme,paragraph.status,paragraph.submittedAt,paragraph.reviewVersion,paragraph.createdAt,paragraph.updatedAt]
       );
 
       for (const tagId of paragraph.tags) {
@@ -98,19 +98,22 @@ class MySQLParagraphRepository {
       connection.release();
     }
 
-    return this.findById(paragraph.id);
+    return this.findByIdAny(paragraph.id);
   }
 
   async findById(id) {
-    return this.withTags(await this.first("SELECT * FROM paragraphs WHERE id = ?", [id]));
+    return this.withTags(await this.first("SELECT * FROM paragraphs WHERE id = ? AND status='approved'", [id]));
   }
+
+  async findByIdAny(id) { return this.withTags(await this.first("SELECT * FROM paragraphs WHERE id=?", [id])); }
+  async findNextPending() { return this.withTags(await this.first("SELECT * FROM paragraphs WHERE status='pending' ORDER BY submitted_at,id LIMIT 1")); }
 
   async findByUserId(userId) {
     return this.listWithRelationsSingleQuery("WHERE p.author_id = ?", [userId]);
   }
 
   async search(keyword = "", theme = "", tags = []) {
-    const clauses = [];
+    const clauses = ["p.status='approved'"];
     const params = [];
 
     if (keyword) {
@@ -133,7 +136,7 @@ class MySQLParagraphRepository {
       params.push(...tags, tags.length);
     }
 
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const where = `WHERE ${clauses.join(" AND ")}`;
     return this.listWithRelationsSingleQuery(where, params);
   }
 
@@ -150,6 +153,17 @@ class MySQLParagraphRepository {
     } finally {
       connection.release();
     }
+  }
+
+  async updateReview(p, expectedVersion) {
+    const [result] = await this.db.query(
+      "UPDATE paragraphs SET content=?,theme=?,status=?,review_version=?,reviewed_by=?,reviewed_at=?,rejection_reason=?,updated_at=? WHERE id=? AND review_version=? AND status='pending'",
+      [p.content,p.theme,p.status,p.reviewVersion,p.reviewedBy,p.reviewedAt,p.rejectionReason,p.updatedAt,p.id,expectedVersion]
+    );
+    if (!result.affectedRows) { const error = new Error("Review version conflict"); error.code = "REVIEW_VERSION_CONFLICT"; throw error; }
+    await this.db.query("DELETE FROM paragraph_tags WHERE paragraph_id=?", [p.id]);
+    for (const tag of p.tags) await this.db.query("INSERT IGNORE INTO paragraph_tags(paragraph_id,tag_id) VALUES(?,?)", [p.id,tag]);
+    return this.findByIdAny(p.id);
   }
 
   async first(sql, params = []) {
@@ -177,6 +191,12 @@ class MySQLParagraphRepository {
       themeName: row.theme,
       tags: tags.map((tag) => tag.id),
       tagNames: tags.map((tag) => tag.name),
+      status: row.status || "approved",
+      submittedAt: row.submitted_at || row.created_at,
+      reviewVersion: Number(row.review_version || 0),
+      reviewedBy: row.reviewed_by || null,
+      reviewedAt: row.reviewed_at || null,
+      rejectionReason: row.rejection_reason || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -272,6 +292,9 @@ class MySQLParagraphRepository {
           id: row.id, content: row.content, authorId: row.author_id,
           authorName: row.author_name || "系统示例", theme: row.theme, themeName: row.theme,
           tags: [], tagNames: [], collectionCount: Number(row.collection_count || 0),
+          status: row.status || "approved", submittedAt: row.submitted_at || row.created_at,
+          reviewVersion: Number(row.review_version || 0), reviewedBy: row.reviewed_by || null,
+          reviewedAt: row.reviewed_at || null, rejectionReason: row.rejection_reason || null,
           createdAt: row.created_at, updatedAt: row.updated_at
         });
       }

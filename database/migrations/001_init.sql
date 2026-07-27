@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS paragraphs (
   content TEXT NOT NULL,
   author_id TEXT NOT NULL,
   theme TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'approved',
+  submitted_at TEXT,
+  review_version INTEGER NOT NULL DEFAULT 0,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  rejection_reason TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE

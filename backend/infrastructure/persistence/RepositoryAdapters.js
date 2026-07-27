@@ -2,6 +2,7 @@ class UserRepositoryAdapter {
   constructor(repository) { this.repository = repository; }
   create(data) { return this.repository.create(data); }
   findById(id) { return this.repository.findById(id); }
+  findByIdAny(id) { return this.repository.findByIdAny(id); }
   findByUsername(username) { return this.repository.findByUsername(username); }
   createSession(id, userId, createdAt) { return this.repository.createSession(id, userId, createdAt); }
   findUserIdBySession(id) { return this.repository.findUserIdBySession(id); }
@@ -12,9 +13,12 @@ class ParagraphRepositoryAdapter {
   constructor(repository) { this.repository = repository; }
   create(data) { return this.repository.create(data); }
   findById(id) { return this.repository.findById(id); }
+  findByIdAny(id) { return this.repository.findByIdAny(id); }
   findByUserId(id) { return this.repository.findByUserId(id); }
   search(keyword, theme, tags) { return this.repository.search(keyword, theme, tags); }
   deleteById(id) { return this.repository.deleteById(id); }
+  findNextPending() { return this.repository.findNextPending(); }
+  updateReview(data, version) { return this.repository.updateReview(data, version); }
 }
 
 class CollectionRepositoryAdapter {

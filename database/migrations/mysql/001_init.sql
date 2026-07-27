@@ -11,6 +11,12 @@ CREATE TABLE IF NOT EXISTS paragraphs (
   content TEXT NOT NULL,
   author_id VARCHAR(64) NOT NULL,
   theme VARCHAR(191) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'approved',
+  submitted_at VARCHAR(32) NULL,
+  review_version INT NOT NULL DEFAULT 0,
+  reviewed_by VARCHAR(64) NULL,
+  reviewed_at VARCHAR(32) NULL,
+  rejection_reason TEXT NULL,
   created_at VARCHAR(32) NOT NULL,
   updated_at VARCHAR(32) NOT NULL,
   CONSTRAINT fk_paragraphs_author

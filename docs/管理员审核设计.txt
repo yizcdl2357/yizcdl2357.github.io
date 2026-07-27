@@ -1,0 +1,188 @@
+# 管理员审核与发布设计
+
+## 1. 范围与不变项
+
+- 仅 `Role.value === "admin"` 是管理员；`user` 无任何管理职权。
+- 管理员可删除任意已发布文章，作者仍可删除自己的已发布文章。
+- 普通用户提交后进入 FIFO 审查队列，不出现在首页、语料库、搜索、详情或收藏接口中；管理员提交直接发布。
+- 本次新增“审查”页面和个人主页的待审/已拒绝区域，沿用现有布局、组件和响应式风格。
+- 现有登录、Session、Cookie、跨设备 MySQL 权威数据、DDD 分层和公开文章 DTO 保持兼容。
+- 默认决策：作者本次只能删除自己的 `pending` 记录；`rejected` 必须保留，暂不允许删除。
+
+## 2. DDD 模型
+
+沿用现有 `Paragraph` 聚合和文章 ID，不创建一套重复正文实体。为聚合增加发布状态和值对象，并由 Moderation 应用用例编排审核。
+
+```mermaid
+classDiagram
+    class Paragraph {
+        <<Aggregate Root>>
+        +ParagraphId id
+        +ParagraphContent content
+        +UserId authorId
+        +ThemeName theme
+        +TagSet tags
+        +PublicationStatus status
+        +SubmittedAt submittedAt
+        +ReviewVersion reviewVersion
+        +updatePendingDraft(content, theme, tags)
+        +approve(reviewerId, reviewedAt)
+        +reject(reviewerId, reviewedAt, reason)
+        +assertPublishedDeletableBy(actor)
+        +assertPendingDeletableBy(actor)
+    }
+    class PublicationStatus {
+        <<Value Object>>
+        +pending
+        +approved
+        +rejected
+    }
+    class ModerationPolicy {
+        +canReview(userRole)
+        +canDeletePublished(actor, paragraph)
+        +canDeletePending(actor, paragraph)
+    }
+    Paragraph *-- PublicationStatus
+    ModerationPolicy ..> Paragraph
+```
+
+领域规则：
+
+- 普通用户创建：`pending`；管理员创建：`approved`。
+- 只允许 `pending -> approved` 或 `pending -> rejected`，禁止重新批准已拒绝记录、撤回已发布记录或重复审核。
+- 只有管理员可以修改待审正文、主题和标签，且只能修改 `pending`。
+- 公共 Corpus Repository 的搜索、列表、详情和收藏存在性检查必须只读取 `approved`。
+- 角色判断集中在 `ModerationPolicy`/应用层授权 guard；Controller 只负责认证和 DTO 映射，Repository 不决定权限。
+
+## 3. FIFO 与并发抢占
+
+队列顺序固定为：
+
+```text
+status = pending
+ORDER BY submitted_at ASC, id ASC
+```
+
+获取队首同时执行短租约抢占，避免两个管理员审核同一记录：
+
+1. 若当前管理员已有未过期 claim，优先返回该记录。
+2. MySQL 在事务中使用 `SELECT ... FOR UPDATE SKIP LOCKED` 选择最早的未抢占或已过期记录；SQLite 使用 `BEGIN IMMEDIATE` 完成同等原子选择与更新。
+3. 写入 `review_claimed_by`、`review_claimed_at`、`review_claim_expires_at`，租约建议 5 分钟。
+4. 编辑、批准、拒绝均携带 `expectedVersion`；更新条件包含 `status='pending' AND review_version=?`，成功后版本加一。
+5. claim 超时后可被其他管理员重新获取；批准、拒绝或作者删除待审记录时立即清除 claim。
+
+FIFO 指“可领取记录中的最早提交项”。被其他管理员有效抢占的队首不会阻塞后续管理员领取下一条。
+
+## 4. 应用命令与查询
+
+| 用例 | 权限 | 行为 |
+| --- | --- | --- |
+| `CreateParagraphCommand` | 已登录 | admin 直接 approved；user 创建 pending |
+| `DeletePublishedParagraphCommand` | 作者或 admin | 删除 approved 文章及标签、收藏关系 |
+| `DeletePendingSubmissionCommand` | 待审记录作者 | 删除 pending 并移出队列；rejected 不允许 |
+| `ClaimNextReviewCommand` | admin | 原子领取 FIFO 队首 |
+| `UpdatePendingSubmissionCommand` | admin + 有效版本 | 修改正文、主题、标签 |
+| `ApproveSubmissionCommand` | admin + 有效版本 | pending -> approved，进入公共语料库 |
+| `RejectSubmissionCommand` | admin + 有效版本 | pending -> rejected，保留记录和原因 |
+| `ListMySubmissionsQuery` | 当前用户 | 返回自己的 pending/rejected |
+
+批准操作必须在同一事务内更新状态、审核字段和版本。批准成功后公共读取立即以 MySQL 为准，不额外复制数据。
+
+## 5. API 契约
+
+保留现有路径：
+
+- `POST /api/paragraphs`：请求不变。响应增量包含 `status`；user 返回 `pending`，admin 返回 `approved`。
+- `DELETE /api/paragraphs/:id`：对 approved 文章，作者或 admin 可删除；其他用户返回 403。
+- `GET /api/paragraphs`、`GET /api/paragraphs/:id`：只返回 approved，现有 JSON 字段和排序保持不变。
+
+新增路径：
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /api/me/submissions?status=pending,rejected` | 当前用户查看自己的待审/已拒绝记录 |
+| `DELETE /api/me/submissions/:id` | 作者删除自己的 pending；rejected 返回 409 |
+| `POST /api/admin/reviews/next/claim` | 管理员原子领取下一条；空队列返回 200 和 `submission:null` |
+| `PATCH /api/admin/reviews/:id` | 管理员修改 pending 草稿，提交 `expectedVersion` |
+| `POST /api/admin/reviews/:id/approve` | 管理员批准，提交 `expectedVersion` |
+| `POST /api/admin/reviews/:id/reject` | 管理员拒绝，提交 `expectedVersion` 和可选 `reason` |
+
+审核 DTO 至少包含：`id/content/theme/tags/tagNames/authorId/authorName/status/submittedAt/updatedAt/reviewVersion/claimExpiresAt/rejectionReason`。公开文章 DTO 不暴露 claim、拒绝原因等审核内部字段。
+
+所有 `/api/admin/*` 路径必须在服务端验证 Session 对应用户的 `role === admin`。普通用户即使手工访问 URL 或调用 API 也返回 403；前端隐藏入口不是安全边界。
+
+## 6. 数据库增量迁移
+
+在 `paragraphs` 增加：
+
+```text
+status                  pending | approved | rejected
+submitted_at            提交队列时间
+reviewed_by             最终审核管理员 ID，可空
+reviewed_at             最终审核时间，可空
+rejection_reason        拒绝原因，可空
+review_claimed_by       当前抢占管理员 ID，可空
+review_claimed_at       抢占时间，可空
+review_claim_expires_at 抢占过期时间，可空
+review_version          乐观锁版本，默认 0
+published_at            发布时间，可空
+published_by            发布操作者 ID，可空
+```
+
+索引：
+
+- `idx_paragraphs_review_queue(status, submitted_at, id)`
+- `idx_paragraphs_author_status(author_id, status, submitted_at)`
+- `idx_paragraphs_claim(status, review_claim_expires_at)`
+
+迁移规则：
+
+- SQLite 通过 `PRAGMA table_info`、MySQL 通过 `information_schema` 判断列和索引是否存在，迁移可重复执行。
+- 所有历史文章回填为 `approved`，`submitted_at=created_at`、`published_at=created_at`；不得把现有文章放入待审队列。
+- 新字段只作加法迁移，不改变表名、主键、正文、作者、标签、收藏和现有时间字段的语义。
+- 首次迁移可暂不为审核用户列增加数据库外键，以避免 SQLite 重建整表；应用层必须验证用户存在，后续可单独做安全表重建迁移。
+- Repository 映射非法状态时必须报领域/数据错误，不得静默当作 approved。
+
+## 7. 审计与删除语义
+
+- 审核完成保留 `reviewed_by/reviewed_at/status/rejection_reason`；拒绝记录不进入公共查询，但作者与管理员可查看。
+- 管理员直接上传：`status=approved`，`published_by=author_id`，`published_at=created_at`，无需伪造审核记录。
+- 管理员批准：同时写入 `reviewed_by`、`reviewed_at`、`published_by`、`published_at`。
+- 作者删除 pending：物理删除正文与标签关联并释放 claim；应记录结构化服务日志（记录 ID、actor ID、动作和时间，不记录正文）。
+- 删除 approved：沿用现有事务删除标签与收藏；授权扩展为 `authorId === actor.id || actor.role === admin`。
+- rejected 本次禁止删除，以满足“拒绝状态保留”；返回明确冲突错误。
+
+## 8. 前端页面与导航
+
+- `AuthService` 仍以 `/api/auth/me` 的 `role` 为准。管理员顶栏增加“审查”入口；普通用户不渲染该按钮。
+- `goToPage('review')` 增加客户端 guard；非 admin 返回首页或登录页并显示无权限信息。服务端仍必须独立返回 403。
+- 审查页沿用现有 form、textarea、标签选择器、primary/secondary/danger 按钮样式，不改变全站 CSS 主题。
+- 审查页显示当前队首、作者、提交时间、正文、主题、标签；支持保存修改、批准、拒绝。操作成功后自动领取下一条。
+- 普通用户主页新增“待审”和“已拒绝”分区；pending 提供删除按钮，rejected 只读并显示拒绝原因（有原因时）。已发布列表保持现状。
+- 首页、语料库、搜索、详情、收藏列表的可见 DOM 和渲染逻辑只消费 approved 数据，不显示审核状态。
+
+## 9. 错误码与 HTTP 状态
+
+| HTTP | code | 场景 |
+| --- | --- | --- |
+| 401 | `AUTH_REQUIRED` | 未登录访问用户或管理功能 |
+| 403 | `ADMIN_REQUIRED` | 非管理员访问审查 API/页面 |
+| 403 | `DELETE_FORBIDDEN` | 非作者且非管理员删除已发布文章 |
+| 404 | `SUBMISSION_NOT_FOUND` | 审核记录不存在，或用户查询不属于自己的记录 |
+| 409 | `INVALID_STATUS_TRANSITION` | 对非 pending 执行批准/拒绝/编辑 |
+| 409 | `REVIEW_VERSION_CONFLICT` | `expectedVersion` 已过期 |
+| 409 | `REVIEW_CLAIM_CONFLICT` | 记录由其他管理员有效抢占 |
+| 409 | `REJECTED_RETENTION_REQUIRED` | 作者尝试删除 rejected |
+| 400 | `INVALID_PARAGRAPH_CONTENT` | 修改后的正文、主题或标签校验失败 |
+
+错误响应继续使用现有 `{ok:false,message,...}` 结构，可增量添加稳定 `code`；不得把 SQL、堆栈、角色以外的用户数据或抢占内部信息泄露给客户端。
+
+## 10. 程序员实现约束与验收
+
+- 不信任客户端传入的 `role/authorId/status/reviewedBy`；全部从 Session 和领域规则生成。
+- 所有公共查询增加 approved 过滤，并为历史数据迁移提供回归测试，避免上线后语料库变空。
+- 单元测试覆盖状态机、管理员/作者删除策略、普通上传 pending、管理员上传 approved。
+- Repository/迁移测试覆盖 FIFO、同时间以 ID 排序、重复迁移、claim 过期、并发版本冲突及 SQLite/MySQL 等价。
+- HTTP 契约测试覆盖普通用户 403、管理员完整审核、拒绝保留、pending 删除、公开列表不可见 pending/rejected。
+- E2E 验收覆盖管理员导航入口、普通用户无入口且手工访问失败、个人主页分区、批准后跨设备可见、拒绝后仅作者/管理员可见。
+- 不修改现有 CSS 视觉规则、公开 API 路径、Session/Cookie 语义或 DDD 依赖方向。
