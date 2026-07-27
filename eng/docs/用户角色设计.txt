@@ -1,0 +1,8 @@
+# 用户角色设计
+
+- Identity 上下文的 `Role` 值对象仅允许稳定值 `user`、`admin`。
+- `User` 聚合持有 `role`；注册用例始终创建 `user`，忽略客户端提交的角色，防止自助提权。
+- 现有用户名精确等于 `yizcdl2357` 的用户回填为 `admin`；其他用户默认 `user`。
+- SQLite/MySQL 的 `users.role` 均为非空字段且默认 `user`。迁移仅在缺列时执行 `ALTER`，重复运行安全；非法或空值归一为 `user`，不降级其他合法 `admin`。
+- 注册、登录、`GET /api/auth/me` 等现有用户 DTO 增加 `role`，但 API 路径、Session、Cookie、状态码和其他字段保持不变。
+- 本次页面不展示角色，也不依据角色执行权限判断。未来授权应通过独立应用层策略实现并单独发布。
