@@ -260,12 +260,23 @@ const UI = (() => {
   }
 
   let currentReview = null;
+  function clearReviewEditor() {
+    currentReview = null;
+    $("reviewForm").hidden = true;
+    $("reviewEmpty").hidden = true;
+    $("reviewMeta").textContent = "";
+    $("reviewContent").value = "";
+    $("reviewTheme").value = "";
+    $("reviewReason").value = "";
+    document.querySelectorAll('input[name="reviewTags"]').forEach((item) => item.checked = false);
+  }
   async function renderReview() {
+    clearReviewEditor();
     const result = await ModerationService.next();
     currentReview = result.submission || null;
     const form = $("reviewForm");
     if (!currentReview) {
-      form.hidden = true;
+      $("reviewEmpty").hidden = false;
       return true;
     }
     form.hidden = false;

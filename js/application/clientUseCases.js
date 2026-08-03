@@ -15,7 +15,7 @@ window.ClientUseCases = (() => ({
   moderation: {
     next: () => ApiGateway.get("/api/reviews/next"),
     update: (id, data) => ApiGateway.patch(`/api/reviews/${encodeURIComponent(id)}`, data),
-    approve: (id, expectedVersion) => ApiGateway.post(`/api/reviews/${encodeURIComponent(id)}/approve`, { expectedVersion }),
+    approve: (id, data) => ApiGateway.post(`/api/reviews/${encodeURIComponent(id)}/approve`, data),
     reject: (id, expectedVersion, reason) => ApiGateway.post(`/api/reviews/${encodeURIComponent(id)}/reject`, { expectedVersion, reason })
   },
   collection: {

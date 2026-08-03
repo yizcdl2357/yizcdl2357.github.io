@@ -15,7 +15,7 @@ async function exercise(Adapter, methods) {
 
 Promise.all([
   exercise(UserRepositoryAdapter, ["create", "findById", "findByUsername", "createSession", "findUserIdBySession", "deleteSession"]),
-  exercise(ParagraphRepositoryAdapter, ["create", "findById", "findByUserId", "search", "deleteById"]),
+  exercise(ParagraphRepositoryAdapter, ["create", "findById", "findByIdAny", "findByUserId", "search", "deleteById", "findNextPending", "updateReview"]),
   exercise(CollectionRepositoryAdapter, ["create", "delete", "findByUserId", "countByParagraphId", "exists", "deleteByParagraphId"]),
   exercise(TagRepositoryAdapter, ["findAll", "findByName", "validateTags"])
 ]).then(() => console.log("Repository adapter contract tests passed")).catch((error) => { console.error(error); process.exit(1); });

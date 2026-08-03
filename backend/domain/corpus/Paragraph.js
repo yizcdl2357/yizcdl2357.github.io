@@ -64,8 +64,11 @@ class Paragraph {
     this.reviewVersion += 1;
   }
 
-  approve({ reviewerId, reviewedAt, expectedVersion }) {
+  approve({ content, theme, tags, reviewerId, reviewedAt, expectedVersion }) {
     this.assertPending(expectedVersion);
+    this.content = new ParagraphContent(content);
+    this.theme = theme instanceof ThemeName ? theme : new ThemeName(theme);
+    this.tags = tags instanceof TagSet ? tags : new TagSet(tags || []);
     this.status = new PublicationStatus("approved");
     this.reviewedBy = reviewerId;
     this.reviewedAt = reviewedAt;

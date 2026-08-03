@@ -64,7 +64,14 @@ class CorpusUseCases {
       const paragraph = Paragraph.rehydrate(row);
       const now = this.clock.now();
       if (action === "update") paragraph.updatePending({ content, theme, tags: await this.tagRepository.validateTags(tags || []), expectedVersion, updatedAt: now });
-      else if (action === "approve") paragraph.approve({ reviewerId: user.id, reviewedAt: now, expectedVersion });
+      else if (action === "approve") paragraph.approve({
+        content,
+        theme,
+        tags: await this.tagRepository.validateTags(tags || []),
+        reviewerId: user.id,
+        reviewedAt: now,
+        expectedVersion
+      });
       else paragraph.reject({ reviewerId: user.id, reviewedAt: now, reason, expectedVersion });
       const saved = await this.paragraphRepository.updateReview(paragraph.toPersistence(), expectedVersion);
       return { ok: true, paragraph: saved };

@@ -10,7 +10,7 @@
     "db:copy-to-mysql": "node backend/scripts/copySqliteToMysql.js",
     "test": "npm run test:unit && npm run test:contract && npm run test:e2e",
     "test:unit": "node tests/unit/ddd.test.js && node tests/unit/role.test.js && node tests/unit/moderation.test.js",
-    "test:contract": "node tests/contract/routes.test.js && node tests/contract/repositoryAdapters.test.js && node tests/contract/mysqlPerformance.test.js && node tests/contract/mysqlModerationPerformance.test.js && node tests/contract/roleMigration.test.js",
+    "test:contract": "node tests/contract/routes.test.js && node tests/contract/repositoryAdapters.test.js && node tests/contract/mysqlPerformance.test.js && node tests/contract/mysqlModerationPerformance.test.js && node tests/contract/roleMigration.test.js && node tests/contract/moderationApproval.test.js",
     "test:e2e": "node tests/e2e/moderation.e2e.js"
   }
 }

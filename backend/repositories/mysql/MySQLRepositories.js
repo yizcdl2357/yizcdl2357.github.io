@@ -156,13 +156,23 @@ class MySQLParagraphRepository {
   }
 
   async updateReview(p, expectedVersion) {
-    const [result] = await this.db.query(
-      "UPDATE paragraphs SET content=?,theme=?,status=?,review_version=?,reviewed_by=?,reviewed_at=?,rejection_reason=?,updated_at=? WHERE id=? AND review_version=? AND status='pending'",
-      [p.content,p.theme,p.status,p.reviewVersion,p.reviewedBy,p.reviewedAt,p.rejectionReason,p.updatedAt,p.id,expectedVersion]
-    );
-    if (!result.affectedRows) { const error = new Error("Review version conflict"); error.code = "REVIEW_VERSION_CONFLICT"; throw error; }
-    await this.db.query("DELETE FROM paragraph_tags WHERE paragraph_id=?", [p.id]);
-    for (const tag of p.tags) await this.db.query("INSERT IGNORE INTO paragraph_tags(paragraph_id,tag_id) VALUES(?,?)", [p.id,tag]);
+    const connection = await this.db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.query(
+        "UPDATE paragraphs SET content=?,theme=?,status=?,review_version=?,reviewed_by=?,reviewed_at=?,rejection_reason=?,updated_at=? WHERE id=? AND review_version=? AND status='pending'",
+        [p.content,p.theme,p.status,p.reviewVersion,p.reviewedBy,p.reviewedAt,p.rejectionReason,p.updatedAt,p.id,expectedVersion]
+      );
+      if (!result.affectedRows) { const error = new Error("Review version conflict"); error.code = "REVIEW_VERSION_CONFLICT"; throw error; }
+      await connection.query("DELETE FROM paragraph_tags WHERE paragraph_id=?", [p.id]);
+      for (const tag of p.tags) await connection.query("INSERT IGNORE INTO paragraph_tags(paragraph_id,tag_id) VALUES(?,?)", [p.id,tag]);
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
     return this.findByIdAny(p.id);
   }
 
