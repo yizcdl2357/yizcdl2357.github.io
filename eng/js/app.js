@@ -187,8 +187,8 @@ function bindForms() {
     UI.$(buttonId).addEventListener("click", async () => {
       const review = UI.getCurrentReview();
       if (!review) return;
-      const data = action === "update" ? { content:UI.$("reviewContent").value,theme:UI.$("reviewTheme").value,tags:UI.getCheckedValues("reviewTags"),expectedVersion:review.reviewVersion } : null;
-      const result = action === "update" ? await ModerationService.update(review.id,data) : action === "approve" ? await ModerationService.approve(review.id,review.reviewVersion) : await ModerationService.reject(review.id,review.reviewVersion,UI.$("reviewReason").value);
+      const editedSnapshot = { content:UI.$("reviewContent").value,theme:UI.$("reviewTheme").value,tags:UI.getCheckedValues("reviewTags"),expectedVersion:review.reviewVersion };
+      const result = action === "update" ? await ModerationService.update(review.id,editedSnapshot) : action === "approve" ? await ModerationService.approve(review.id,editedSnapshot) : await ModerationService.reject(review.id,review.reviewVersion,UI.$("reviewReason").value);
       UI.showMessage("reviewMessage", result.message || (result.ok ? "操作成功" : "操作失败"), result.ok);
       if (result.ok) await UI.renderReview();
     });

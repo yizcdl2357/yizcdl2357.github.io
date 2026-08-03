@@ -26,7 +26,7 @@ classDiagram
         +SubmittedAt submittedAt
         +ReviewVersion reviewVersion
         +updatePendingDraft(content, theme, tags)
-        +approve(reviewerId, reviewedAt)
+        +approve(editedContent, editedTheme, editedTags, reviewerId, reviewedAt)
         +reject(reviewerId, reviewedAt, reason)
         +assertPublishedDeletableBy(actor)
         +assertPendingDeletableBy(actor)
@@ -51,6 +51,8 @@ classDiagram
 - 普通用户创建：`pending`；管理员创建：`approved`。
 - 只允许 `pending -> approved` 或 `pending -> rejected`，禁止重新批准已拒绝记录、撤回已发布记录或重复审核。
 - 只有管理员可以修改待审正文、主题和标签，且只能修改 `pending`。
+- 管理员从审查页点击“批准发布”时，以按钮触发瞬间的编辑器正文、主题和标签作为唯一发布快照；不得从初次领取记录、页面缓存或修改前 DTO 重新读取旧值。
+- 批准用例必须先校验并写入该发布快照，再完成 `pending -> approved`；正文、主题、标签、状态、审核字段和版本必须在同一事务中成功或回滚。
 - 公共 Corpus Repository 的搜索、列表、详情和收藏存在性检查必须只读取 `approved`。
 - 角色判断集中在 `ModerationPolicy`/应用层授权 guard；Controller 只负责认证和 DTO 映射，Repository 不决定权限。
 
@@ -82,11 +84,11 @@ FIFO 指“可领取记录中的最早提交项”。被其他管理员有效抢
 | `DeletePendingSubmissionCommand` | 待审记录作者 | 删除 pending 并移出队列；rejected 不允许 |
 | `ClaimNextReviewCommand` | admin | 原子领取 FIFO 队首 |
 | `UpdatePendingSubmissionCommand` | admin + 有效版本 | 修改正文、主题、标签 |
-| `ApproveSubmissionCommand` | admin + 有效版本 | pending -> approved，进入公共语料库 |
+| `ApproveSubmissionCommand` | admin + 有效版本 | 接收当前编辑快照，原子保存正文/主题/标签并执行 pending -> approved，进入公共语料库 |
 | `RejectSubmissionCommand` | admin + 有效版本 | pending -> rejected，保留记录和原因 |
 | `ListMySubmissionsQuery` | 当前用户 | 返回自己的 pending/rejected |
 
-批准操作必须在同一事务内更新状态、审核字段和版本。批准成功后公共读取立即以 MySQL 为准，不额外复制数据。
+批准操作必须接收 `content/theme/tags/expectedVersion`，并在同一事务内更新正文、主题、标签、状态、审核字段和版本。即使管理员未先点击“保存修改”，点击“批准发布”也必须发布表单中的当前值。任何字段校验或数据库写入失败都不得产生部分修改或发布旧正文。批准成功后公共读取立即以 MySQL 为准，不额外复制数据。
 
 ## 5. API 契约
 
@@ -104,7 +106,7 @@ FIFO 指“可领取记录中的最早提交项”。被其他管理员有效抢
 | `DELETE /api/me/submissions/:id` | 作者删除自己的 pending；rejected 返回 409 |
 | `POST /api/admin/reviews/next/claim` | 管理员原子领取下一条；空队列返回 200 和 `submission:null` |
 | `PATCH /api/admin/reviews/:id` | 管理员修改 pending 草稿，提交 `expectedVersion` |
-| `POST /api/admin/reviews/:id/approve` | 管理员批准，提交 `expectedVersion` |
+| `POST /api/admin/reviews/:id/approve` | 管理员批准，提交当前编辑器的 `content`、`theme`、`tags` 和 `expectedVersion`；服务端原子保存并发布该快照 |
 | `POST /api/admin/reviews/:id/reject` | 管理员拒绝，提交 `expectedVersion` 和可选 `reason` |
 
 审核 DTO 至少包含：`id/content/theme/tags/tagNames/authorId/authorName/status/submittedAt/updatedAt/reviewVersion/claimExpiresAt/rejectionReason`。公开文章 DTO 不暴露 claim、拒绝原因等审核内部字段。
@@ -158,6 +160,9 @@ published_by            发布操作者 ID，可空
 - `goToPage('review')` 增加客户端 guard；非 admin 返回首页或登录页并显示无权限信息。服务端仍必须独立返回 403。
 - 审查页沿用现有 form、textarea、标签选择器、primary/secondary/danger 按钮样式，不改变全站 CSS 主题。
 - 审查页显示当前队首、作者、提交时间、正文、主题、标签；支持保存修改、批准、拒绝。操作成功后自动领取下一条。
+- “批准发布”不得依赖管理员先点击“保存修改”：事件处理器必须在点击时读取正文输入框、主题控件和标签控件的当前值，并连同当前 `reviewVersion` 一次提交给批准 API。批准成功后的详情页和公共列表必须展示这一份编辑快照。
+- 领取下一条前先清空内存中的 `currentSubmission` 和所有编辑字段，再根据响应渲染。`submission === null` 时进入唯一的 `empty` 状态：仅显示“当前没有待审查语段”的空状态提示，隐藏并清空作者信息、提交时间、正文、主题、标签、保存、批准和拒绝控件；不得保留上一条语段的 DOM 内容或可操作按钮。
+- 审查页渲染采用互斥状态：`loading`、`editing`、`empty`、`error` 同时只能有一个可见。只有 `editing && currentSubmission != null` 才允许显示表单和操作按钮；批准/拒绝成功后，在下一次领取完成前必须保持表单隐藏。
 - 普通用户主页新增“待审”和“已拒绝”分区；pending 提供删除按钮，rejected 只读并显示拒绝原因（有原因时）。已发布列表保持现状。
 - 首页、语料库、搜索、详情、收藏列表的可见 DOM 和渲染逻辑只消费 approved 数据，不显示审核状态。
 
@@ -184,5 +189,37 @@ published_by            发布操作者 ID，可空
 - 单元测试覆盖状态机、管理员/作者删除策略、普通上传 pending、管理员上传 approved。
 - Repository/迁移测试覆盖 FIFO、同时间以 ID 排序、重复迁移、claim 过期、并发版本冲突及 SQLite/MySQL 等价。
 - HTTP 契约测试覆盖普通用户 403、管理员完整审核、拒绝保留、pending 删除、公开列表不可见 pending/rejected。
+- HTTP 契约测试必须额外覆盖：领取原语段后不调用 PATCH，直接在 approve 请求中传入修改后的正文、主题、标签，随后公共详情和列表只能返回修改后的全部字段；旧字段不得残留。
 - E2E 验收覆盖管理员导航入口、普通用户无入口且手工访问失败、个人主页分区、批准后跨设备可见、拒绝后仅作者/管理员可见。
+- E2E 必须额外覆盖：管理员同时修改正文、主题、标签后直接批准，发布结果与三个表单字段逐项一致；审核完最后一条后页面仅显示空状态提示，表单和保存/批准/拒绝按钮均不可见，上一条正文不在 DOM 中。
 - 不修改现有 CSS 视觉规则、公开 API 路径、Session/Cookie 语义或 DDD 依赖方向。
+
+## 11. 修复后的批准与空队列时序
+
+```mermaid
+sequenceDiagram
+    actor Admin as 管理员
+    participant ReviewPage as 审查页面
+    participant API as 审核 API
+    participant Service as ApproveSubmissionCommand
+    participant DB as ParagraphRepository/DB
+
+    Admin->>ReviewPage: 编辑正文、主题、标签并点击批准发布
+    ReviewPage->>ReviewPage: 读取当前表单快照和 reviewVersion
+    ReviewPage->>API: POST /api/admin/reviews/:id/approve\n{content, theme, tags, expectedVersion}
+    API->>Service: 执行原子批准
+    Service->>Service: 校验管理员、pending、版本与全部编辑字段
+    Service->>DB: 同一事务更新正文、主题、标签、approved、审核字段和版本
+    DB-->>Service: 提交修改后的已发布语段
+    Service-->>API: 返回批准成功
+    API-->>ReviewPage: approved submission
+    ReviewPage->>ReviewPage: 立即清空 currentSubmission 与表单并隐藏操作区
+    ReviewPage->>API: POST /api/admin/reviews/next/claim
+    alt 仍有待审语段
+        API-->>ReviewPage: submission = 下一条
+        ReviewPage->>ReviewPage: 进入 editing，填充并显示表单
+    else 队列为空
+        API-->>ReviewPage: submission = null
+        ReviewPage->>ReviewPage: 进入 empty，仅显示空状态提示
+    end
+```

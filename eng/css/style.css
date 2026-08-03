@@ -823,6 +823,10 @@ legend {
   white-space: pre-wrap;
 }
 
+.page [hidden] {
+  display: none !important;
+}
+
 .empty {
   border: 1px dashed rgba(159, 185, 200, 0.48);
   border-radius: var(--radius);
